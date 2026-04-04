@@ -1,0 +1,27 @@
+name: Sync and Wake HF
+
+on:
+  push:
+    branches: [main]       # 每次往 main 分支推代码时触发同步
+  schedule:
+    - cron: '0 */12 * * *' # 每 12 小时触发唤醒
+  workflow_dispatch:      # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Wake Up Space
+        run: curl -I https://huggingface.co/spaces/dfsfads/YuNote
+
+      - name: Push to HF
+        if: github.event_name == 'push' # 只有在 push 时才执行同步
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force https://dfsfads:$HF_TOKEN@huggingface.co/spaces/dfsfads/YuNote main
