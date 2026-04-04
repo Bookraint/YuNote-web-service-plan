@@ -32,7 +32,7 @@ LLM_BASE_URL = os.environ.get(
     "LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
 )
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
-LLM_MODEL   = os.environ.get("LLM_MODEL",   "qwen-plus")
+LLM_MODEL   = os.environ.get("LLM_MODEL",   "qwen3.5-35b-a3b")
 
 # ── ElevenLabs（对应本地 settings.json [ElevenLabs] 段）───────────────
 ELEVENLABS_MODEL_ID         = os.environ.get("ELEVENLABS_MODEL_ID",         "scribe_v1")
