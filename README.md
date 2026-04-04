@@ -1,13 +1,12 @@
 ---
-title: YuNote
-emoji: 🔥
-colorFrom: indigo
-colorTo: indigo
-sdk: docker
-pinned: false
----
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+## title: YuNote Web
+emoji: 🎤
+colorFrom: gray
+colorTo: blue
+sdk: docker
+app_port: 7860
+
 # YuNote 网页化落地步骤
 
 本文档整理自本地 YuNote（Python 桌面应用）改为网页服务时的目标架构、实施顺序与运维要点。转录使用 **ElevenLabs**，总结使用 **Qwen**（与桌面端相同，经 OpenAI 兼容接口，如 SiliconCloud 等，见 `app/common/config.py`）。
@@ -16,12 +15,14 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 ## 一、目标架构（摘要）
 
-| 层级 | 建议 |
-|------|------|
-| 客户端 | 浏览器 SPA 或轻量前端；上传音频、查看进度、展示/下载转录与总结 |
-| API | Python **FastAPI**（或 Starlette）：REST，可选 **SSE** / **WebSocket** 推送进度 |
-| 后台任务 | 转录与长文总结耗时长，使用 **异步队列**（Celery+Redis、RQ、Arq 等）与 Web 进程分离 |
-| 存储 | 开发期可沿用「笔记目录 + `meta.json`」思路；上线建议 **对象存储** + **数据库**（PostgreSQL / SQLite）记录任务状态 |
+
+| 层级   | 建议                                                                              |
+| ---- | ------------------------------------------------------------------------------- |
+| 客户端  | 浏览器 SPA 或轻量前端；上传音频、查看进度、展示/下载转录与总结                                              |
+| API  | Python **FastAPI**（或 Starlette）：REST，可选 **SSE** / **WebSocket** 推送进度            |
+| 后台任务 | 转录与长文总结耗时长，使用 **异步队列**（Celery+Redis、RQ、Arq 等）与 Web 进程分离                         |
+| 存储   | 开发期可沿用「笔记目录 + `meta.json`」思路；上线建议 **对象存储** + **数据库**（PostgreSQL / SQLite）记录任务状态 |
+
 
 **数据流**：音频上传 → 队列 → `transcribe`（ElevenLabs）→ 转录文本 → `Summarizer`（Qwen）→ Markdown 总结 → 持久化并返回前端。
 
@@ -45,16 +46,14 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 网页服务侧不必重新「找一套新平台」，与桌面版对齐即可：**密钥与模型名沿用你在 YuNote 里已经填好的值**，上线时改为从服务端环境变量或密钥管理读取（与 `app/common/config.py` 中的项一一对应）。
 
-1. **ElevenLabs（转录）**  
-   - 桌面端配置项见 `Config`：`elevenlabs_model_id`（默认 `scribe_v1`）、`elevenlabs_diarize`、`elevenlabs_tag_audio_events`（`app/common/config.py` 中 `[ElevenLabs]` 段）。  
-   - 本地已生效的值在 **`YuNote/AppData/settings.json`**（随应用数据目录可能略有不同）。  
-   - Web 服务实现时：把这些字段映射为环境变量（或等价配置），并继续走现有 `TranscribeConfig` → `ElevenLabsASR` / 分块逻辑；若日后改为官方 API Key 鉴权，仍复用同一套「模型 ID + diarize + 分块/限流」语义。
-
-2. **Qwen / OpenAI 兼容 LLM（总结）**  
-   - 桌面端由 `llm_service` 选择供应商，`TaskFactory._get_llm_config()` 汇总为 `(base_url, api_key, model)` 写入 `SummaryConfig`（见 `app/core/task_factory.py`）。  
-   - 若你本地已用 **SiliconCloud** 跑 Qwen，对应 `silicon_cloud_api_base`、`silicon_cloud_api_key`、`silicon_cloud_model`（默认 `Qwen/Qwen2.5-7B-Instruct` 与 `https://api.siliconflow.cn/v1`）；若用 **OpenAI 兼容** 其它端点，则对应 `openai_*` 或其它已选服务的键。  
-   - Web 端同样：**直接复用这三元组**，无需为「网页版」单独再申请一套账号（除非你想隔离配额）。
-
+1. **ElevenLabs（转录）**
+  - 桌面端配置项见 `Config`：`elevenlabs_model_id`（默认 `scribe_v1`）、`elevenlabs_diarize`、`elevenlabs_tag_audio_events`（`app/common/config.py` 中 `[ElevenLabs]` 段）。  
+  - 本地已生效的值在 `**YuNote/AppData/settings.json`**（随应用数据目录可能略有不同）。  
+  - Web 服务实现时：把这些字段映射为环境变量（或等价配置），并继续走现有 `TranscribeConfig` → `ElevenLabsASR` / 分块逻辑；若日后改为官方 API Key 鉴权，仍复用同一套「模型 ID + diarize + 分块/限流」语义。
+2. **Qwen / OpenAI 兼容 LLM（总结）**
+  - 桌面端由 `llm_service` 选择供应商，`TaskFactory._get_llm_config()` 汇总为 `(base_url, api_key, model)` 写入 `SummaryConfig`（见 `app/core/task_factory.py`）。  
+  - 若你本地已用 **SiliconCloud** 跑 Qwen，对应 `silicon_cloud_api_base`、`silicon_cloud_api_key`、`silicon_cloud_model`（默认 `Qwen/Qwen2.5-7B-Instruct` 与 `https://api.siliconflow.cn/v1`）；若用 **OpenAI 兼容** 其它端点，则对应 `openai_*` 或其它已选服务的键。  
+  - Web 端同样：**直接复用这三元组**，无需为「网页版」单独再申请一套账号（除非你想隔离配额）。
 3. **域名**（若公网访问）：购买域名并配置 HTTPS 证书（与本地代码无绑定，单独准备即可）。
 
 ---
@@ -76,12 +75,12 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 ## 五、上线与安全 Checklist
 
-- [ ] API Key 仅服务端配置（环境变量或密钥管理），不入库、不下发浏览器。
-- [ ] HTTPS、CORS 仅允许自有前端域名（若分离部署）。
-- [ ] 上传限流与单用户/全站配额，防止滥用第三方 API。
-- [ ] 大文件：分片上传、大小上限、弱网重试（微信内网络差异大）。
-- [ ] 日志与告警：进程存活、队列积压、磁盘空间、5xx。
-- [ ] 备份策略（数据库与重要对象存储）。
+- API Key 仅服务端配置（环境变量或密钥管理），不入库、不下发浏览器。
+- HTTPS、CORS 仅允许自有前端域名（若分离部署）。
+- 上传限流与单用户/全站配额，防止滥用第三方 API。
+- 大文件：分片上传、大小上限、弱网重试（微信内网络差异大）。
+- 日志与告警：进程存活、队列积压、磁盘空间、5xx。
+- 备份策略（数据库与重要对象存储）。
 
 ---
 
@@ -104,9 +103,26 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 ---
 
-## 八、本仓库：自定义场景 Prompt
+## 八、Hugging Face Spaces 部署（Docker）
 
-打开网页后点右上角 **「场景 Prompt」**，可在线编辑四套模板并保存，**下次总结立即使用**（无需重启）。亦可直接改磁盘上的 **`prompts/summary_*.md`**；或通过环境变量 **`PROMPTS_DIR`** 指向自定义目录。模板中必须包含占位符 **`{{transcript}}`**。详见 **`prompts/README.md`**。
+本仓库根目录提供 `**Dockerfile`**：安装 **ffmpeg**、安装 `requirements-web.txt`，以 `**uvicorn web.main:app`** 启动（**无 `--reload`**），监听 `**PORT` 环境变量**，未设置时默认为 **7860**（与上方 README 元数据中 `app_port` 一致）。
+
+1. **新建 Space**：在 [Hugging Face](https://huggingface.co/new-space) 选择 **Docker**，将本仓库推送到 Space 对应 Git 仓库；或上传文件并包含 `Dockerfile`。
+2. **密钥与变量**：在 Space **Settings → Secrets and variables** 中配置与 `**.env.example`** 同名的变量（如 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 等）。不要在仓库中提交 `.env`。
+3. **数据持久化**：免费 Space 重启后容器内磁盘会清空。需要长期保留上传与 SQLite 时，可开通 Space **持久存储**，并将环境变量指向挂载卷，例如：
+  `NOTES_DIR=/data/notes`、`UPLOAD_DIR=/data/uploads`、`DB_PATH=/data/jobs.db`（`/data` 为持久卷路径，见 [Spaces 存储说明](https://huggingface.co/docs/hub/spaces-storage)）。
+4. **本地构建自检**（需已安装 Docker）：
+  ```bash
+   docker build -t yunote-web .
+   docker run --rm -p 7860:7860 -e LLM_API_KEY=sk-bf9c7c2a0bf641c2a81ee50c62fcd98b yunote-web
+  ```
+   浏览器访问 `http://localhost:7860` 验证首页与 API。
+
+---
+
+## 九、本仓库：自定义场景 Prompt
+
+打开网页后点右上角 **「场景 Prompt」**，可在线编辑四套模板并保存，**下次总结立即使用**（无需重启）。亦可直接改磁盘上的 `**prompts/summary_*.md`**；或通过环境变量 `**PROMPTS_DIR**` 指向自定义目录。模板中必须包含占位符 `**{{transcript}}**`。详见 `**prompts/README.md**`。
 
 ---
 
