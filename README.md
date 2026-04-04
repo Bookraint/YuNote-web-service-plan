@@ -1,16 +1,15 @@
 ---
-
-## title: YuNote Web
+title: YuNote Web
 emoji: 🎤
 colorFrom: gray
 colorTo: blue
 sdk: docker
 app_port: 7860
+---
 
 # YuNote 网页化落地步骤
 
 本文档整理自本地 YuNote（Python 桌面应用）改为网页服务时的目标架构、实施顺序与运维要点。转录使用 **ElevenLabs**，总结使用 **Qwen**（与桌面端相同，经 OpenAI 兼容接口，如 SiliconCloud 等，见 `app/common/config.py`）。
-
 ---
 
 ## 一、目标架构（摘要）
