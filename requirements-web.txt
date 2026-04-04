@@ -1,0 +1,20 @@
+# YuNote Web 服务依赖
+# 安装：pip install -r requirements-web.txt
+# 注意：YuNote 桌面端的 app/core/ 代码会通过 sys.path 直接引用，
+#       其自身的 requests / openai / pydub 等已在 YuNote 环境中安装。
+
+# Web 框架
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9   # 文件上传
+
+# 配置
+python-dotenv>=1.0.0
+
+# YuNote core 间接依赖（若未在同一 venv，需单独安装）
+requests>=2.32.0
+openai>=1.0.0
+pydub>=0.25.1
+tenacity>=8.2.0
+langdetect>=1.0.9
+pysocks>=1.7.1

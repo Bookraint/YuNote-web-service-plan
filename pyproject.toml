@@ -1,0 +1,20 @@
+[project]
+name = "yunote-web-service-plan"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "diskcache>=5.6.3",
+    "fastapi>=0.111.0",
+    "httpx[socks]>=0.28.1",
+    "langdetect>=1.0.9",
+    "openai>=1.0.0",
+    "pydub>=0.25.1",
+    "pysocks>=1.7.1",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.9",
+    "requests>=2.32.0",
+    "tenacity>=8.2.0",
+    "uvicorn[standard]>=0.29.0",
+]
