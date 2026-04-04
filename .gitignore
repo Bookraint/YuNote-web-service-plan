@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[oc]
+*.py[cod]
+*$py.class
+build/
+dist/
+wheels/
+*.egg-info
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local env & secrets（勿提交密钥；保留 .env.example 供参考）
+.env
+.env.local
+.env.*.local
+
+# Runtime data（上传、笔记、SQLite、日志、ASR 缓存）
+data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
