@@ -1,93 +1,63 @@
-"""FastAPI 路由定义"""
+"""FastAPI 路由定义（无用户账号，access_token 凭证访问）"""
 from __future__ import annotations
 
 import asyncio
 import json
+import math
 import queue
-import threading
 import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from core.entities import NoteSceneEnum
+from core.utils.audio_utils import get_duration
 
 from . import settings as cfg
-from .pipeline import run_pipeline
+from .deps import get_job_by_access_token
+from .cancel_registry import request_cancel
+from .job_queue import drop_queue, get_queue
+from .job_store import JobStore
 
 router = APIRouter()
 
-# 场景 Prompt 文件名（与 core/summary/summarizer._SCENE_PROMPT_FILES 一致）
 _PROMPT_FILES: dict[str, str] = {
-    "general": "summary_general.md",
-    "meeting": "summary_meeting.md",
-    "lecture": "summary_lecture.md",
+    "general":   "summary_general.md",
+    "meeting":   "summary_meeting.md",
+    "lecture":   "summary_lecture.md",
     "interview": "summary_interview.md",
 }
 
+_SCENE_MAP: dict[str, NoteSceneEnum] = {
+    "通用": NoteSceneEnum.GENERAL,
+    "会议": NoteSceneEnum.MEETING,
+    "课程": NoteSceneEnum.LECTURE,
+    "访谈": NoteSceneEnum.INTERVIEW,
+}
+
+
+# ── 场景 Prompt（读文件系统，无 per-user 存储）───────────────────
 
 class PromptsBody(BaseModel):
-    general: str = Field(default="", description="通用场景 Markdown，须含 {{transcript}}")
-    meeting: str = Field(default="", description="会议")
-    lecture: str = Field(default="", description="课程")
-    interview: str = Field(default="", description="访谈")
+    general:   str = Field(default="")
+    meeting:   str = Field(default="")
+    lecture:   str = Field(default="")
+    interview: str = Field(default="")
 
-
-# ── 场景 Prompt（网页随改，写入 PROMPTS_DIR）──────────────────────────
 
 @router.get("/api/prompts")
 def get_prompts():
-    """读取当前四套场景模板（磁盘上的最新内容，下次总结立即生效）。"""
     out: dict[str, str] = {}
     for key, fname in _PROMPT_FILES.items():
         path = cfg.PROMPTS_DIR / fname
         out[key] = path.read_text(encoding="utf-8") if path.exists() else ""
-    out["prompts_dir"] = str(cfg.PROMPTS_DIR)
     return out
 
 
-@router.put("/api/prompts")
-def put_prompts(body: PromptsBody):
-    """保存四套场景模板；每份须包含占位符 {{transcript}}。"""
-    data = {
-        "general": body.general,
-        "meeting": body.meeting,
-        "lecture": body.lecture,
-        "interview": body.interview,
-    }
-    for key, text in data.items():
-        if "{{transcript}}" not in text:
-            raise HTTPException(
-                400,
-                detail=f"场景「{key}」模板必须包含占位符 {{transcript}}",
-            )
-    cfg.PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
-    for key, fname in _PROMPT_FILES.items():
-        (cfg.PROMPTS_DIR / fname).write_text(data[key], encoding="utf-8")
-    return {"ok": True, "prompts_dir": str(cfg.PROMPTS_DIR)}
-
-
-# 每个任务对应一个进度队列：progress_cb 从 worker 线程 put，SSE 端点 get
-_progress_queues: dict[str, queue.Queue] = {}
-_queues_lock = threading.Lock()
-
-
-def _get_queue(job_id: str) -> queue.Queue:
-    with _queues_lock:
-        if job_id not in _progress_queues:
-            _progress_queues[job_id] = queue.Queue(maxsize=512)
-        return _progress_queues[job_id]
-
-
-def _drop_queue(job_id: str) -> None:
-    with _queues_lock:
-        _progress_queues.pop(job_id, None)
-
-
-# ── 上传并创建任务 ────────────────────────────────────────────────────
+# ── 上传文件并获取报价 ────────────────────────────────────────────
 
 @router.post("/api/jobs")
 async def create_job(
@@ -96,89 +66,96 @@ async def create_job(
     language: str = Form(default=""),
     scene: str = Form(default="通用"),
 ):
-    store = request.app.state.store
+    store: JobStore = request.app.state.store
 
     content = await file.read()
     if len(content) > cfg.MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(413, detail=f"文件超过 {cfg.MAX_UPLOAD_MB} MB 限制")
 
-    suffix = Path(file.filename or "audio").suffix or ".mp3"
+    suffix  = Path(file.filename or "audio").suffix or ".mp3"
     job_id  = uuid.uuid4().hex[:12]
     stem    = Path(file.filename or "audio").stem[:40]
     note_id = f"{stem}_{job_id}"
 
-    cfg.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    audio_path = cfg.UPLOAD_DIR / f"{job_id}{suffix}"
+    upload_dir = cfg.UPLOAD_DIR / job_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = upload_dir / f"{job_id}{suffix}"
     audio_path.write_bytes(content)
 
-    scene_map  = {s.value: s for s in NoteSceneEnum}
-    scene_enum = scene_map.get(scene, NoteSceneEnum.GENERAL)
-    note_dir   = cfg.NOTES_DIR / note_id
+    duration_sec   = get_duration(str(audio_path))
+    billed_minutes = max(1, math.ceil(duration_sec / 60)) if duration_sec else 1
 
-    store.create(job_id, note_id, file.filename or "", scene=scene, language=language)
+    store.create(
+        job_id=job_id,
+        note_id=note_id,
+        filename=file.filename or "",
+        tier="standard",
+        scene=scene,
+        language=language,
+        upload_file_path=str(audio_path),
+        duration_sec=duration_sec,
+    )
 
-    prog_queue = _get_queue(job_id)
-
-    def _progress_cb(p: int, msg: str) -> None:
-        try:
-            prog_queue.put_nowait({"progress": p, "stage": msg})
-        except queue.Full:
-            pass
-
-    def _worker() -> None:
-        try:
-            run_pipeline(
-                job_id=job_id,
-                audio_path=str(audio_path),
-                note_dir=note_dir,
-                scene=scene_enum,
-                language=language,
-                store=store,
-                progress_cb=_progress_cb,
-            )
-        finally:
-            # 发送终止信号（区别 done / failed）
-            job = store.get(job_id)
-            final_status = job["status"] if job else "failed"
-            try:
-                prog_queue.put_nowait({"__end__": True, "status": final_status})
-            except queue.Full:
-                pass
-
-    threading.Thread(target=_worker, daemon=True).start()
-
-    return JSONResponse({"job_id": job_id, "note_id": note_id, "status": "queued"}, status_code=201)
+    return JSONResponse({
+        "job_id":                   job_id,
+        "note_id":                  note_id,
+        "status":                   "awaiting_payment",
+        "duration_sec":             duration_sec,
+        "billed_minutes":           billed_minutes,
+        "amount_standard_cents":    billed_minutes * cfg.PRICE_PER_MIN_STANDARD_CENTS,
+        "amount_premium_cents":     billed_minutes * cfg.PRICE_PER_MIN_PREMIUM_CENTS,
+    }, status_code=201)
 
 
-# ── 查询任务状态 ──────────────────────────────────────────────────────
+# ── 查询任务状态（仅凭 job_id，支付前用）────────────────────────
 
-@router.get("/api/jobs")
-def list_jobs(request: Request):
-    return request.app.state.store.list_all()
-
-
-@router.get("/api/jobs/{job_id}")
-def get_job(job_id: str, request: Request):
+@router.get("/api/jobs/{job_id}/status")
+def get_job_status(job_id: str, request: Request):
+    """支付前轮询用，只返回 status/progress/stage，不含结果路径。"""
     job = request.app.state.store.get(job_id)
     if not job:
         raise HTTPException(404, detail="任务不存在")
-    return job
+    return {
+        "job_id":   job["job_id"],
+        "status":   job["status"],
+        "progress": job["progress"],
+        "stage":    job["stage"],
+        "error":    job.get("error"),
+    }
 
 
-# ── SSE 进度流 ────────────────────────────────────────────────────────
+@router.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, request: Request):
+    store: JobStore = request.app.state.store
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(404, detail="任务不存在")
+    st = job.get("status") or ""
+    if st in ("done", "failed", "cancelled"):
+        return {"ok": True, "status": st}
+    fired = request_cancel(job_id)
+    if not fired and st == "awaiting_payment":
+        store.update(job_id, status="cancelled", stage="已取消", error="")
+        return {"ok": True}
+    if fired and st in ("queued", "transcribing", "summarizing", "awaiting_payment"):
+        store.update(job_id, stage="正在停止…")
+    return {"ok": True}
+
+
+# ── SSE 进度流（支付前/后均可用，只需 job_id）────────────────────
 
 @router.get("/api/jobs/{job_id}/stream")
 async def stream_progress(job_id: str, request: Request):
-    store = request.app.state.store
-    if not store.get(job_id):
+    store: JobStore = request.app.state.store
+    job = store.get(job_id)
+    if not job:
         raise HTTPException(404, detail="任务不存在")
 
-    prog_queue = _get_queue(job_id)
+    prog_queue = get_queue(job_id)
 
     async def _event_gen():
         try:
             while True:
-                # 先把队列里现有消息全部 drain
                 drained_any = False
                 while True:
                     try:
@@ -191,69 +168,95 @@ async def stream_progress(job_id: str, request: Request):
                     except queue.Empty:
                         break
 
-                # 没有新消息时，检查是否已是终态（防止队列漏掉终止信号）
                 if not drained_any:
-                    job = store.get(job_id)
-                    if job and job["status"] in ("done", "failed"):
+                    j = store.get(job_id)
+                    if j and j["status"] in ("done", "failed", "cancelled"):
                         yield (
-                            f"data: {json.dumps({'__end__': True, 'status': job['status'], 'progress': job['progress'], 'stage': job['stage']}, ensure_ascii=False)}\n\n"
+                            f"data: {json.dumps({'__end__': True, 'status': j['status'], 'progress': j['progress'], 'stage': j['stage']}, ensure_ascii=False)}\n\n"
                         )
                         return
-                    # keepalive，防止微信/Nginx 断连
                     yield ": keepalive\n\n"
 
                 await asyncio.sleep(0.4)
         finally:
-            _drop_queue(job_id)
+            drop_queue(job_id)
 
     return StreamingResponse(
         _event_gen(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   # 关闭 Nginx 缓冲，让 SSE 实时到达
+            "X-Accel-Buffering": "no",
         },
     )
 
 
-# ── 获取结果文本 ──────────────────────────────────────────────────────
+# ── 获取结果（凭 access_token 查询参数）─────────────────────────
 
-def _note_dir(store, job_id: str) -> Path:
-    job = store.get(job_id)
-    if not job:
-        raise HTTPException(404, detail="任务不存在")
+def _note_dir(job: dict) -> Path:
     return cfg.NOTES_DIR / job["note_id"]
 
 
+def _require_job(job_id: str, token: str | None) -> dict:
+    """按 access_token 查 job，并校验 job_id 匹配。"""
+    job = get_job_by_access_token(None, token)
+    if job["job_id"] != job_id:
+        raise HTTPException(403, detail="凭证与任务不匹配")
+    return job
+
+
 @router.get("/api/jobs/{job_id}/transcript")
-def get_transcript(job_id: str, request: Request):
-    path = _note_dir(request.app.state.store, job_id) / "transcript.txt"
+def get_transcript(
+    job_id: str,
+    token: str | None = Query(default=None),
+):
+    job = _require_job(job_id, token)
+    base = _note_dir(job)
+    path = base / "transcript.txt"
     if not path.exists():
         raise HTTPException(404, detail="转录文件尚未生成")
-    return {"text": path.read_text(encoding="utf-8")}
+    text = path.read_text(encoding="utf-8")
+    seg_path = base / "transcript_segments.json"
+    segments: Optional[list] = None
+    if seg_path.exists():
+        try:
+            segments = json.loads(seg_path.read_text(encoding="utf-8"))
+        except Exception:
+            segments = None
+    return {"text": text, "segments": segments}
 
 
 @router.get("/api/jobs/{job_id}/summary")
-def get_summary(job_id: str, request: Request):
-    path = _note_dir(request.app.state.store, job_id) / "summary.md"
+def get_summary(
+    job_id: str,
+    token: str | None = Query(default=None),
+):
+    job = _require_job(job_id, token)
+    path = _note_dir(job) / "summary.md"
     if not path.exists():
         raise HTTPException(404, detail="总结文件尚未生成")
     return {"markdown": path.read_text(encoding="utf-8")}
 
 
-# ── 下载文件 ──────────────────────────────────────────────────────────
-
 @router.get("/api/jobs/{job_id}/transcript/download")
-def download_transcript(job_id: str, request: Request):
-    path = _note_dir(request.app.state.store, job_id) / "transcript.txt"
+def download_transcript(
+    job_id: str,
+    token: str | None = Query(default=None),
+):
+    job = _require_job(job_id, token)
+    path = _note_dir(job) / "transcript.txt"
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(path, filename=f"{job_id}_transcript.txt", media_type="text/plain; charset=utf-8")
 
 
 @router.get("/api/jobs/{job_id}/summary/download")
-def download_summary(job_id: str, request: Request):
-    path = _note_dir(request.app.state.store, job_id) / "summary.md"
+def download_summary(
+    job_id: str,
+    token: str | None = Query(default=None),
+):
+    job = _require_job(job_id, token)
+    path = _note_dir(job) / "summary.md"
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(path, filename=f"{job_id}_summary.md", media_type="text/markdown; charset=utf-8")

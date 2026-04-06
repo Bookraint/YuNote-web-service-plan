@@ -1,86 +1,70 @@
-"""SQLite-backed 任务状态存储（不依赖 Qt / cfg）"""
+"""Supabase-backed 任务状态存储（无用户账号版）"""
 from __future__ import annotations
 
-import sqlite3
-import threading
+import secrets
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS jobs (
-    job_id      TEXT PRIMARY KEY,
-    note_id     TEXT NOT NULL,
-    filename    TEXT NOT NULL DEFAULT '',
-    status      TEXT NOT NULL DEFAULT 'queued',
-    progress    INTEGER NOT NULL DEFAULT 0,
-    stage       TEXT NOT NULL DEFAULT '等待中',
-    error       TEXT,
-    scene       TEXT NOT NULL DEFAULT '通用',
-    language    TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-);
-"""
+from .db import get_db
 
-# 终态
-TERMINAL_STATUSES = {"done", "failed"}
+
+def _new_access_token() -> str:
+    return secrets.token_urlsafe(24)
 
 
 class JobStore:
-    def __init__(self, db_path: Path):
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = str(db_path)
-        self._lock = threading.Lock()
-        self._init_db()
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _init_db(self):
-        with self._lock:
-            conn = self._connect()
-            conn.execute(_SCHEMA)
-            conn.commit()
-            conn.close()
-
-    def create(self, job_id: str, note_id: str, filename: str, scene: str = "通用", language: str = "") -> dict:
+    def create(
+        self,
+        job_id: str,
+        note_id: str,
+        filename: str,
+        tier: str = "standard",
+        scene: str = "通用",
+        language: str = "",
+        upload_file_path: str = "",
+        duration_sec: Optional[float] = None,
+    ) -> dict:
         now = datetime.utcnow().isoformat()
-        with self._lock:
-            conn = self._connect()
-            conn.execute(
-                "INSERT INTO jobs (job_id,note_id,filename,status,progress,stage,scene,language,created_at,updated_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (job_id, note_id, filename, "queued", 0, "等待中", scene, language, now, now),
-            )
-            conn.commit()
-            conn.close()
-        return self.get(job_id)  # type: ignore[return-value]
+        row: dict = {
+            "job_id":           job_id,
+            "note_id":          note_id,
+            "filename":         filename,
+            "status":           "awaiting_payment",
+            "progress":         0,
+            "stage":            "等待支付",
+            "scene":            scene,
+            "language":         language,
+            "tier":             tier,
+            "upload_file_path": upload_file_path,
+            "duration_sec":     duration_sec,
+            "access_token":     None,   # 支付成功后由 order_routes 写入
+            "created_at":       now,
+            "updated_at":       now,
+        }
+        get_db().table("jobs").insert(row).execute()
+        return row
 
-    def update(self, job_id: str, **kwargs):
+    def update(self, job_id: str, **kwargs) -> None:
         kwargs["updated_at"] = datetime.utcnow().isoformat()
-        cols = ", ".join(f"{k}=?" for k in kwargs)
-        vals = list(kwargs.values()) + [job_id]
-        with self._lock:
-            conn = self._connect()
-            conn.execute(f"UPDATE jobs SET {cols} WHERE job_id=?", vals)
-            conn.commit()
-            conn.close()
+        get_db().table("jobs").update(kwargs).eq("job_id", job_id).execute()
+
+    def grant_access(self, job_id: str) -> str:
+        """颁发 access_token（仅在支付成功时调用），返回 token 字符串。"""
+        token = _new_access_token()
+        self.update(job_id, access_token=token)
+        return token
 
     def get(self, job_id: str) -> Optional[dict]:
-        with self._lock:
-            conn = self._connect()
-            row = conn.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
-            conn.close()
-        return dict(row) if row else None
+        res = get_db().table("jobs").select("*").eq("job_id", job_id).execute()
+        return res.data[0] if res.data else None
 
     def list_all(self) -> list[dict]:
-        with self._lock:
-            conn = self._connect()
-            rows = conn.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT 100"
-            ).fetchall()
-            conn.close()
-        return [dict(r) for r in rows]
+        res = (
+            get_db()
+            .table("jobs")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return res.data or []

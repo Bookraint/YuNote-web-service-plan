@@ -1,7 +1,6 @@
-"""FastAPI 应用入口"""
+"""FastAPI 应用入口（无用户账号版）"""
 from __future__ import annotations
 
-# 必须最先加载 .env，settings.py 在模块导入时读取环境变量
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -16,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from . import settings as cfg
 from .job_store import JobStore
 from .routes import router
+from .order_routes import router as order_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -24,14 +24,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 async def lifespan(app: FastAPI):
     cfg.NOTES_DIR.mkdir(parents=True, exist_ok=True)
     cfg.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    app.state.store = JobStore(cfg.DB_PATH)
+    app.state.store = JobStore()
     yield
 
 
 app = FastAPI(
     title="YuNote Web",
-    version="0.1.0",
-    description="音频转录与 AI 总结网页服务",
+    version="0.3.0",
+    description="音频转录与 AI 总结网页服务（一次付款，即用即得）",
     lifespan=lifespan,
 )
 
@@ -42,6 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(order_router)
 app.include_router(router)
 
 

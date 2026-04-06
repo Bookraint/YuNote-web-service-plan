@@ -309,6 +309,31 @@ class ASRData:
                 f.write("\n".join(result))
         return text
 
+    def ui_segments(self) -> List[dict]:
+        """供 Web 分色展示：解析行首 `[说话人]`（与 ElevenLabs diarize 一致），附起止时间毫秒。"""
+        out: List[dict] = []
+        spk_head = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
+        for seg in self.segments:
+            raw = (seg.text or "").strip()
+            speaker: Optional[str] = None
+            content = raw
+            m = spk_head.match(raw)
+            if m:
+                label, rest = m.group(1).strip(), m.group(2)
+                lab_low = label.lower()
+                if "speaker" in lab_low or label.startswith("说话人"):
+                    speaker = label
+                    content = (rest or "").strip()
+            out.append(
+                {
+                    "start_ms": seg.start_time,
+                    "end_ms": seg.end_time,
+                    "speaker": speaker,
+                    "text": content,
+                }
+            )
+        return out
+
     def to_srt(
         self,
         layout: SubtitleLayoutEnum = SubtitleLayoutEnum.ORIGINAL_ON_TOP,
