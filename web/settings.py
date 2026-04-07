@@ -36,25 +36,18 @@ from core.entities import (
 SUPABASE_URL         = _env_str("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = _env_str("SUPABASE_SERVICE_KEY")
 
-# ── Stripe（默认关闭：不配置则走「免支付」开发流程）────────────────
-# 仅当 STRIPE_CHECKOUT_ENABLED=true 且密钥为真实 sk_test_/sk_live_ 格式时才调 Stripe API
-STRIPE_CHECKOUT_ENABLED = _env_bool("STRIPE_CHECKOUT_ENABLED", False)
-STRIPE_SECRET_KEY = _env_str("STRIPE_SECRET_KEY")
-STRIPE_WEBHOOK_SECRET = _env_str("STRIPE_WEBHOOK_SECRET")
-# Stripe Secret Key：sk_test_ / sk_live_ 后跟至少 20 位字母数字（占位符 sk_test_... 不匹配）
-_STRIPE_SECRET_RE = re.compile(r"^sk_(test|live)_[A-Za-z0-9]{20,}$")
+# ── 兑换码积分定价（积分/分钟）────────────────────────────────────
+# 标准档：默认 10 积分/分钟；高级档：默认 30 积分/分钟
+PRICE_PER_MIN_STANDARD_CREDITS = int(os.environ.get("PRICE_PER_MIN_STANDARD_CREDITS", "10"))
+PRICE_PER_MIN_PREMIUM_CREDITS  = int(os.environ.get("PRICE_PER_MIN_PREMIUM_CREDITS",  "30"))
 
+# ── 开发/测试模式：跳过兑换码验证直接激活 ─────────────────────────
+# 设为 true 时任意输入的兑换码均视为有效（用于本地调试）
+DEV_SKIP_REDEEM = _env_bool("DEV_SKIP_REDEEM", False)
 
-def stripe_secret_key_valid() -> bool:
-    k = (STRIPE_SECRET_KEY or "").strip()
-    return bool(k and _STRIPE_SECRET_RE.match(k))
-
-# ── 计费定价（分/分钟）────────────────────────────────────────────
-PRICE_PER_MIN_STANDARD_CENTS = int(os.environ.get("PRICE_PER_MIN_STANDARD_CENTS", "50"))
-PRICE_PER_MIN_PREMIUM_CENTS  = int(os.environ.get("PRICE_PER_MIN_PREMIUM_CENTS",  "150"))
-
-# ── 服务 BASE_URL（用于 Stripe success/cancel 回跳）───────────────
-BASE_URL = _env_str("BASE_URL", "http://localhost:7860")
+# ── 管理后台密钥（生成兑换码接口）──────────────────────────────────
+# 用于 POST /api/admin/codes，请设置为足够随机的长字符串
+ADMIN_KEY = _env_str("ADMIN_KEY")
 
 # ── LLM ──────────────────────────────────────────────────────────
 LLM_BASE_URL      = os.environ.get("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")

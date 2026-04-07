@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import queue
 import uuid
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -102,8 +105,8 @@ async def create_job(
         "status":                   "awaiting_payment",
         "duration_sec":             duration_sec,
         "billed_minutes":           billed_minutes,
-        "amount_standard_cents":    billed_minutes * cfg.PRICE_PER_MIN_STANDARD_CENTS,
-        "amount_premium_cents":     billed_minutes * cfg.PRICE_PER_MIN_PREMIUM_CENTS,
+        "credits_standard":         billed_minutes * cfg.PRICE_PER_MIN_STANDARD_CREDITS,
+        "credits_premium":          billed_minutes * cfg.PRICE_PER_MIN_PREMIUM_CREDITS,
     }, status_code=201)
 
 
@@ -138,7 +141,11 @@ def cancel_job(job_id: str, request: Request):
         store.update(job_id, status="cancelled", stage="已取消", error="")
         return {"ok": True}
     if fired and st in ("queued", "transcribing", "summarizing", "awaiting_payment"):
-        store.update(job_id, stage="正在停止…")
+        try:
+            store.update(job_id, stage="正在停止…")
+        except Exception:
+            # 取消信号已发出，stage 更新失败不影响结果
+            logger.warning("cancel_job: 更新 stage 失败 job_id=%s", job_id)
     return {"ok": True}
 
 

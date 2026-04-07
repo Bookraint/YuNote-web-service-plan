@@ -404,10 +404,22 @@
     .tier-card .tier-price small { font-size: 12px; color: var(--muted); }
     .tier-card .tier-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-    /* ── Waiting for payment ── */
-    #payment-waiting { display: none; text-align: center; padding: 20px 0; }
-    #payment-waiting .spinner { font-size: 32px; animation: spin 1.5s linear infinite; display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* ── 兑换码输入 ── */
+    .redeem-row { margin-bottom: 18px; }
+    .redeem-row label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .redeem-input-wrap { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .2s; }
+    .redeem-input-wrap:focus-within { border-color: var(--accent); }
+    .redeem-input-wrap .redeem-icon { padding: 0 12px; display: flex; align-items: center; background: var(--surface2); font-size: 18px; flex-shrink: 0; }
+    .redeem-input-wrap input {
+      flex: 1; border: none; background: var(--surface2); color: var(--text);
+      font-size: 15px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      letter-spacing: .08em; padding: 12px 14px 12px 6px; outline: none;
+    }
+    .redeem-input-wrap input::placeholder { color: var(--muted); letter-spacing: 0; font-family: inherit; }
+    .redeem-input-wrap.has-error { border-color: var(--danger); }
+    .redeem-hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .redeem-hint a { color: var(--accent); text-decoration: none; }
+    .redeem-hint a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -439,7 +451,7 @@
         <p class="dz-filled-title">已选择文件</p>
         <div id="file-name" class="dz-file-name"></div>
         <p class="dz-filled-hint">点击或拖入其他文件以更换</p>
-        <p class="dz-busy-note">处理中，无法更换文件。如需中断请点下方「停止处理」。</p>
+        <p class="dz-busy-note">处理中，无法更换文件。</p>
       </div>
     </div>
     <input type="file" id="file-input" accept="audio/*,video/*" />
@@ -492,10 +504,6 @@
   <!-- 进度卡片 -->
   <div class="card" id="progress-card">
     <div class="card-title">处理进度</div>
-    <div id="payment-waiting">
-      <div class="spinner">⏳</div>
-      <p style="margin-top:12px;color:var(--muted);font-size:14px;">等待支付确认中…</p>
-    </div>
     <div id="progress-body">
       <div class="progress-bar-wrap">
         <div class="progress-bar-fill" id="progress-fill"></div>
@@ -549,17 +557,28 @@
       <div class="tier-cards">
         <div class="tier-card selected" id="tier-standard" onclick="selectTier('standard')">
           <div class="tier-name">标准档</div>
-          <div class="tier-price" id="price-standard">—<small> 元</small></div>
+          <div class="tier-price" id="price-standard">—<small> 积分</small></div>
           <div class="tier-desc">普通 LLM 模型</div>
         </div>
         <div class="tier-card" id="tier-premium" onclick="selectTier('premium')">
           <div class="tier-name">高级档</div>
-          <div class="tier-price" id="price-premium">—<small> 元</small></div>
+          <div class="tier-price" id="price-premium">—<small> 积分</small></div>
           <div class="tier-desc">更强 LLM 模型</div>
         </div>
       </div>
 
-      <button class="btn-primary" id="confirm-pay-btn" onclick="confirmOrder()">确认并去支付</button>
+      <div class="redeem-row">
+        <label>输入兑换码</label>
+        <div class="redeem-input-wrap" id="redeem-wrap">
+          <span class="redeem-icon">🎟</span>
+          <input type="text" id="redeem-code-input" placeholder="在第三方平台购买后填入"
+                 autocomplete="off" spellcheck="false"
+                 oninput="onRedeemInput()" />
+        </div>
+        <div class="redeem-hint">没有积分码？<a href="#" onclick="return false">前往购买</a>（积分码面值需 ≥ 所选档位消耗）</div>
+      </div>
+
+      <button class="btn-primary" id="confirm-pay-btn" onclick="confirmOrder()">兑换并开始处理</button>
       <button class="btn-secondary" style="margin-top:10px" onclick="cancelQuote()">取消，重新选择文件</button>
     </div>
   </div>
@@ -589,7 +608,7 @@
     const btn = document.getElementById('confirm-pay-btn');
     if (!btn) return;
     btn.disabled = false;
-    btn.textContent = '确认并去支付';
+    btn.textContent = '兑换并开始处理';
   }
 
   // ── 状态 ──────────────────────────────────────────────────────
@@ -615,21 +634,10 @@
 
   // ── 初始化 ────────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
-    // URL 参数处理（Stripe 回跳）
-    const params    = new URLSearchParams(location.search);
-    const jobIdFromUrl = params.get('job_id');
-    const paid      = params.get('paid');
-    const cancelled = params.get('cancelled');
-
-    if (jobIdFromUrl && paid === '1') {
+    // 清理历史遗留 URL 参数（如刷新前带有 job_id）
+    const params = new URLSearchParams(location.search);
+    if (params.has('job_id') || params.has('paid') || params.has('cancelled')) {
       history.replaceState(null, '', '/');
-      currentJobId = jobIdFromUrl;
-      showProgress(true);                     // 显示等待支付确认 spinner
-      waitForAccessToken(currentJobId);        // 轮询直到 access_token 可用
-    }
-    if (jobIdFromUrl && cancelled === '1') {
-      history.replaceState(null, '', '/');
-      toast('支付已取消，可重新提交', 'ok');
     }
   });
 
@@ -825,14 +833,17 @@
     document.getElementById('q-duration').textContent = `${durMin} 分 ${durSec} 秒`;
     document.getElementById('q-minutes').textContent  = `${data.billed_minutes} 分钟`;
 
-    const fmt = cents => (cents / 100).toFixed(2);
-    document.getElementById('price-standard').innerHTML = `${fmt(data.amount_standard_cents)}<small> 元</small>`;
-    document.getElementById('price-premium').innerHTML  = `${fmt(data.amount_premium_cents)}<small> 元</small>`;
+    document.getElementById('price-standard').innerHTML = `${data.credits_standard}<small> 积分</small>`;
+    document.getElementById('price-premium').innerHTML  = `${data.credits_premium}<small> 积分</small>`;
+
+    // 重置兑换码输入框
+    const inp = document.getElementById('redeem-code-input');
+    if (inp) { inp.value = ''; }
+    document.getElementById('redeem-wrap').classList.remove('has-error');
 
     selectTier('standard');
     resetQuoteConfirmButton();
     document.getElementById('quote-modal').classList.add('open');
-    // 已进入报价流程，隐藏「上传并获取报价」，取消报价前不可再次提交
     setUploadLocked(true);
     hideUploadPrimaryCta();
     newJobBtn.style.display = 'none';
@@ -850,6 +861,14 @@
     resetUploadState();
   }
 
+  function onRedeemInput() {
+    const inp = document.getElementById('redeem-code-input');
+    // 输入时清除错误状态
+    if (inp && inp.value.trim()) {
+      document.getElementById('redeem-wrap').classList.remove('has-error');
+    }
+  }
+
   async function confirmOrder() {
     if (!currentJobId) return;
     // 如果提示词编辑区有错误（缺 {{transcript}}），阻止提交
@@ -857,18 +876,31 @@
       toast('提示词中缺少 {{transcript}} 占位符，请补充后再提交');
       return;
     }
+    const redeemCode = (document.getElementById('redeem-code-input').value || '').trim();
+    if (!redeemCode) {
+      document.getElementById('redeem-wrap').classList.add('has-error');
+      document.getElementById('redeem-code-input').focus();
+      toast('请输入兑换码');
+      return;
+    }
+
     const btn = document.getElementById('confirm-pay-btn');
     btn.disabled = true;
-    btn.textContent = '创建订单中…';
+    btn.textContent = '验证中…';
 
     const ac = new AbortController();
-    const slowTimer = setTimeout(() => ac.abort(), 90000);
+    const slowTimer = setTimeout(() => ac.abort(), 30000);
 
     try {
       const res = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: currentJobId, tier: selectedTier, custom_prompts: customPrompts }),
+        body: JSON.stringify({
+          job_id: currentJobId,
+          tier: selectedTier,
+          redeem_code: redeemCode,
+          custom_prompts: customPrompts,
+        }),
         signal: ac.signal,
       });
       let d = {};
@@ -876,63 +908,38 @@
       if (ct.includes('application/json')) {
         try { d = await res.json(); } catch (_) { /* 空 body */ }
       }
-      if (!res.ok) throw new Error(apiErrorDetail(d, res.status));
-
-      document.getElementById('quote-modal').classList.remove('open');
-
-      if (d.checkout_url) {
-        // 跳转 Stripe；回跳后凭 ?job_id=...&paid=1 轮询 access_token
-        showProgress(true);
-        window.location.href = d.checkout_url;
-      } else {
-        // 开发免支付模式：服务器直接返回 access_token
-        currentAccessToken = d.access_token || null;
-        showProgress(false);
-        startSSE(currentJobId);
+      if (!res.ok) {
+        // 兑换码相关错误：高亮输入框
+        const errMsg = apiErrorDetail(d, res.status);
+        if (res.status === 400) {
+          document.getElementById('redeem-wrap').classList.add('has-error');
+        }
+        throw new Error(errMsg);
       }
+
+      // 兑换成功：拿到 access_token，直接进入处理流程
+      currentAccessToken = d.access_token || null;
+      document.getElementById('quote-modal').classList.remove('open');
+      showProgress(false);
+      startSSE(currentJobId);
     } catch (e) {
       const msg = (e && e.name === 'AbortError')
-        ? '请求超时（90s），请检查网络或 Stripe 是否可访问后重试'
+        ? '请求超时，请检查网络后重试'
         : (e && e.message) ? e.message : String(e);
-      toast(`创建订单失败：${msg}`);
+      toast(`兑换失败：${msg}`);
     } finally {
       clearTimeout(slowTimer);
       btn.disabled = false;
-      btn.textContent = '确认并去支付';
+      btn.textContent = '兑换并开始处理';
     }
-  }
-
-  /** Stripe 支付回跳后轮询，直到 webhook 写入 access_token（最多等 60s）。 */
-  async function waitForAccessToken(jobId, attempts = 0) {
-    if (attempts > 30) {
-      toast('支付确认超时，请联系客服');
-      clearUploadFileUi();
-      showNewJobOnlyCta();
-      return;
-    }
-    try {
-      const res = await fetch(`${API}/api/jobs/${jobId}/access_token`);
-      if (res.ok) {
-        const d = await res.json();
-        if (d.ready && d.access_token) {
-          currentAccessToken = d.access_token;
-          // access_token 就位后开始监听进度
-          showProgress(false);
-          startSSE(jobId);
-          return;
-        }
-      }
-    } catch { /* 网络错误继续轮询 */ }
-    setTimeout(() => waitForAccessToken(jobId, attempts + 1), 2000);
   }
 
   // ── 进度展示 ──────────────────────────────────────────────────
-  function showProgress(waitingPayment = false) {
+  function showProgress() {
     document.getElementById('progress-card').style.display = 'block';
     document.getElementById('result-card').style.display   = 'none';
-    document.getElementById('payment-waiting').style.display = waitingPayment ? 'block' : 'none';
-    document.getElementById('progress-body').style.display   = waitingPayment ? 'none'  : 'block';
-    if (!waitingPayment) setProgress(0, '等待中…', 'running');
+    document.getElementById('progress-body').style.display = 'block';
+    setProgress(0, '等待中…', 'running');
     setUploadLocked(true);
     hideUploadPrimaryCta();
     newJobBtn.style.display = 'none';

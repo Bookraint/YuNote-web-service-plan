@@ -1,11 +1,14 @@
 """Supabase-backed 任务状态存储（无用户账号版）"""
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import datetime
 from typing import Optional
 
-from .db import get_db
+from .db import get_db, reset_db
+
+logger = logging.getLogger(__name__)
 
 
 def _new_access_token() -> str:
@@ -46,7 +49,15 @@ class JobStore:
 
     def update(self, job_id: str, **kwargs) -> None:
         kwargs["updated_at"] = datetime.utcnow().isoformat()
-        get_db().table("jobs").update(kwargs).eq("job_id", job_id).execute()
+        try:
+            get_db().table("jobs").update(kwargs).eq("job_id", job_id).execute()
+        except Exception as e:
+            # 连接断开时重置并重试一次
+            if "RemoteProtocolError" in type(e).__name__ or "disconnect" in str(e).lower():
+                logger.warning("Supabase 连接断开，正在重试 update job_id=%s", job_id)
+                reset_db().table("jobs").update(kwargs).eq("job_id", job_id).execute()
+            else:
+                raise
 
     def grant_access(self, job_id: str) -> str:
         """颁发 access_token（仅在支付成功时调用），返回 token 字符串。"""

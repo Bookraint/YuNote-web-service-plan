@@ -16,6 +16,7 @@ from . import settings as cfg
 from .job_store import JobStore
 from .routes import router
 from .order_routes import router as order_router
+from .admin_routes import router as admin_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -43,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(order_router)
+app.include_router(admin_router)
 app.include_router(router)
 
 

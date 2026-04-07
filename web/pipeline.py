@@ -70,8 +70,28 @@ def run_pipeline(
         def _transcribe_cb(p: int, msg: str) -> None:
             _cb(int(5 + p * 0.45), msg)
 
-        asr_data = transcribe(processed_path, transcribe_cfg, callback=_transcribe_cb)
+        _asr_result: list = [None]
+        _asr_error: list = [None]
+        _asr_done = threading.Event()
+
+        def _run_transcribe() -> None:
+            try:
+                _asr_result[0] = transcribe(processed_path, transcribe_cfg, callback=_transcribe_cb)
+            except Exception as exc:
+                _asr_error[0] = exc
+            finally:
+                _asr_done.set()
+
+        t = threading.Thread(target=_run_transcribe, daemon=True)
+        t.start()
+
+        while not _asr_done.wait(timeout=0.5):
+            _check_cancel()
+
         _check_cancel()
+        if _asr_error[0] is not None:
+            raise _asr_error[0]
+        asr_data = _asr_result[0]
 
         transcript_text = (
             asr_data.to_txt(include_timestamps=True)
