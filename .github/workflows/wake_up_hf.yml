@@ -19,6 +19,32 @@ jobs:
       - name: Wake Up Space
         run: curl -I https://huggingface.co/spaces/dfsfads/YuNote
 
+      # 轻量请求 PostgREST，避免 Supabase 免费项目长期无流量进入休眠 / 连接被回收
+      # 在仓库 Settings → Secrets → Actions 中配置：
+      #   SUPABASE_URL（如 https://xxxx.supabase.co）
+      #   SUPABASE_SERVICE_KEY（service_role，勿提交到代码库）
+      - name: Wake Supabase (PostgREST)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_KEY:-}" ]; then
+            echo "Skip Supabase wake: set SUPABASE_URL and SUPABASE_SERVICE_KEY in repo Actions secrets."
+            exit 0
+          fi
+          BASE="${SUPABASE_URL%/}"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 45 \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
+            -H "Accept-Profile: public" \
+            "${BASE}/rest/v1/jobs?select=job_id&limit=1")"
+          echo "Supabase PostgREST ping: HTTP ${code}"
+          case "$code" in
+            200|206) ;;
+            *) echo "::warning::Unexpected HTTP ${code} from Supabase (check URL, key, and jobs table)" ;;
+          esac
+
       - name: Push to HF
         if: github.event_name == 'push' # 只有在 push 时才执行同步
         env:
