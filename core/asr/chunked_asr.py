@@ -57,6 +57,11 @@ class ChunkedASR:
         chunk_concurrency: 并发转录数量，默认 3
     """
 
+    # 类级别全局速率状态：所有实例（跨 job）共用同一个滑动窗口，
+    # 确保 TRANSCRIBE_RATE_LIMIT_PER_MINUTE 是真正的全局上限而非每 job 的上限。
+    _global_rate_times: list[float] = []
+    _global_rate_lock: threading.Lock = threading.Lock()
+
     def __init__(
         self,
         asr_class: type[BaseASR],
@@ -80,27 +85,27 @@ class ChunkedASR:
         self.max_retries = max(1, max_retries)
         self.rate_limit_per_minute = max(0, rate_limit_per_minute)
         self.split_threshold_minutes = max(0, split_threshold_minutes)
-        self._rate_times: list[float] = []
-        self._rate_lock = threading.Lock()
 
         # 读取完整音频文件（用于分块）
         with open(audio_path, "rb") as f:
             self.file_binary = f.read()
 
     def _wait_rate_limit(self) -> None:
-        """每分钟最多 rate_limit_per_minute 次请求（滑动窗口）；0 表示不限流。"""
+        """全局速率限制：所有 job 的 chunk 请求共享同一个滑动窗口（0 表示不限流）。"""
         if self.rate_limit_per_minute <= 0:
             return
         window = 60.0
         limit = self.rate_limit_per_minute
         while True:
-            with self._rate_lock:
+            with ChunkedASR._global_rate_lock:
                 now = time.time()
-                self._rate_times = [t for t in self._rate_times if now - t < window]
-                if len(self._rate_times) < limit:
-                    self._rate_times.append(time.time())
+                ChunkedASR._global_rate_times = [
+                    t for t in ChunkedASR._global_rate_times if now - t < window
+                ]
+                if len(ChunkedASR._global_rate_times) < limit:
+                    ChunkedASR._global_rate_times.append(time.time())
                     return
-                wait = window - (now - self._rate_times[0])
+                wait = window - (now - ChunkedASR._global_rate_times[0])
             if wait > 0:
                 time.sleep(wait)
             else:

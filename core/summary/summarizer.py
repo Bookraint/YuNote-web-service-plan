@@ -41,6 +41,11 @@ class SummarizerCancelledError(RuntimeError):
 
 class Summarizer:
 
+    # 类级别全局 RPM 状态：所有实例（跨 job）共用同一个滑动窗口，
+    # 确保 SUMMARY_MAP_RPM 是真正的全局上限而非每 job 的上限。
+    _global_rpm_times: list[float] = []
+    _global_rpm_lock: threading.Lock = threading.Lock()
+
     def __init__(self, config: SummaryConfig):
         self.config = config
         to = getattr(config, "llm_timeout_sec", None) or 600.0
@@ -120,24 +125,25 @@ class Summarizer:
         """Map 阶段：顺序或线程池并发，共享 RPM 滑动窗口。"""
         n = len(chunks)
         workers = max(1, min(self.config.map_concurrency, n))
-        rpm_times: List[float] = []
-        rpm_lock = threading.Lock()
         progress_lock = threading.Lock()
         completed = 0
 
         def wait_rpm() -> None:
+            """全局 RPM 限流：所有 job 的 Map 请求共享同一个滑动窗口。"""
             limit = self.config.map_rpm
             if limit <= 0:
                 return
             window = 60.0
             while True:
-                with rpm_lock:
+                with Summarizer._global_rpm_lock:
                     now = time.time()
-                    rpm_times[:] = [t for t in rpm_times if now - t < window]
-                    if len(rpm_times) < limit:
-                        rpm_times.append(time.time())
+                    Summarizer._global_rpm_times[:] = [
+                        t for t in Summarizer._global_rpm_times if now - t < window
+                    ]
+                    if len(Summarizer._global_rpm_times) < limit:
+                        Summarizer._global_rpm_times.append(time.time())
                         return
-                    wait = window - (now - rpm_times[0])
+                    wait = window - (now - Summarizer._global_rpm_times[0])
                 if wait > 0:
                     time.sleep(wait)
                 else:

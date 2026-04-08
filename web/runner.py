@@ -1,9 +1,16 @@
 """在独立线程中启动流水线，供 order_routes 的 webhook 和开发模式调用。"""
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 from typing import Optional
+
+# 全局并发上限：同时运行的 pipeline 线程数不超过此值。
+# 超出上限的任务在 "queued" 状态下排队，等待空位后自动开始。
+# HF Space 建议设 2，本地开发可设更高。
+_MAX_CONCURRENT_JOBS = int(os.environ.get("MAX_CONCURRENT_JOBS", "2"))
+_job_semaphore = threading.Semaphore(_MAX_CONCURRENT_JOBS)
 
 from core.entities import NoteSceneEnum
 
@@ -46,6 +53,12 @@ def start_job(
             pass
 
     def _worker() -> None:
+        # 等待执行槽位：每 5 秒推一次「排队中」进度，让前端 SSE 保持感知
+        while not _job_semaphore.acquire(timeout=5):
+            try:
+                prog_queue.put_nowait({"progress": 0, "stage": "排队中，等待执行槽位…"})
+            except Exception:
+                pass
         try:
             run_pipeline(
                 job_id=job_id,
@@ -60,6 +73,7 @@ def start_job(
                 cancel_event=cancel_ev,
             )
         finally:
+            _job_semaphore.release()
             unregister_cancel_event(job_id)
             j = store.get(job_id)
             final_status = j["status"] if j else "failed"
@@ -72,5 +86,9 @@ def start_job(
             except Exception:
                 pass
 
-    store.update(job_id, status="queued", stage="队列等待中…")
+    store.update(job_id, status="queued", stage="排队中，等待执行槽位…")
+    try:
+        prog_queue.put_nowait({"progress": 0, "stage": "排队中，等待执行槽位…"})
+    except Exception:
+        pass
     threading.Thread(target=_worker, daemon=True).start()

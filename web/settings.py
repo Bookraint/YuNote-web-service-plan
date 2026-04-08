@@ -91,6 +91,11 @@ UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(_root / "data" / "uploads")))
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 CORS_ORIGINS  = _env_str("CORS_ORIGINS", "*").split(",")
 
+# ── 并发控制 ─────────────────────────────────────────────────────
+# 同时运行的 pipeline 线程数上限（超出的任务排队等待）。
+# HF Space 资源有限，建议设 2；本地调试可调高。
+MAX_CONCURRENT_JOBS = int(os.environ.get("MAX_CONCURRENT_JOBS", "2"))
+
 
 # ── 工厂方法 ─────────────────────────────────────────────────────
 
