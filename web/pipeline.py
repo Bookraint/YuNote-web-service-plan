@@ -108,6 +108,15 @@ def run_pipeline(
             logger.exception("写入 transcript_segments.json 失败 job_id=%s", job_id)
         asr_data.save(str(note_dir / "transcript.srt"))
 
+        # 转录完成后立即删除中间 WAV 文件（由 prepare_audio 转换生成）。
+        # 仅当 processed_path 与原始上传路径不同时才删，避免误删用户上传的 .wav 文件。
+        if processed_path != audio_path:
+            try:
+                Path(processed_path).unlink(missing_ok=True)
+                logger.debug("已删除转换后的临时 WAV job_id=%s path=%s", job_id, processed_path)
+            except Exception:
+                logger.warning("删除临时 WAV 失败 job_id=%s path=%s", job_id, processed_path)
+
         _cb(50, "转录完成，开始 AI 总结…")
 
         # ── 阶段 2：总结 ────────────────────────────────────────────
