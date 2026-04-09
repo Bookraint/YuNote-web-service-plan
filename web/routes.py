@@ -81,14 +81,19 @@ async def create_job(
     note_id = f"{stem}_{job_id}"
 
     upload_dir = cfg.UPLOAD_DIR / job_id
-    upload_dir.mkdir(parents=True, exist_ok=True)
     audio_path = upload_dir / f"{job_id}{suffix}"
-    audio_path.write_bytes(content)
 
-    duration_sec   = get_duration(str(audio_path))
+    def _save_file() -> None:
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        audio_path.write_bytes(content)
+
+    await asyncio.to_thread(_save_file)
+
+    duration_sec   = await asyncio.to_thread(get_duration, str(audio_path))
     billed_minutes = max(1, math.ceil(duration_sec / 60)) if duration_sec else 1
 
-    store.create(
+    await asyncio.to_thread(
+        store.create,
         job_id=job_id,
         note_id=note_id,
         filename=file.filename or "",
@@ -154,7 +159,7 @@ def cancel_job(job_id: str, request: Request):
 @router.get("/api/jobs/{job_id}/stream")
 async def stream_progress(job_id: str, request: Request):
     store: JobStore = request.app.state.store
-    job = store.get(job_id)
+    job = await asyncio.to_thread(store.get, job_id)
     if not job:
         raise HTTPException(404, detail="任务不存在")
 
@@ -176,7 +181,7 @@ async def stream_progress(job_id: str, request: Request):
                         break
 
                 if not drained_any:
-                    j = store.get(job_id)
+                    j = await asyncio.to_thread(store.get, job_id)
                     if j and j["status"] in ("done", "failed", "cancelled"):
                         yield (
                             f"data: {json.dumps({'__end__': True, 'status': j['status'], 'progress': j['progress'], 'stage': j['stage']}, ensure_ascii=False)}\n\n"
