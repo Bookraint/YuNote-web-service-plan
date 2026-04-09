@@ -4,7 +4,7 @@ YuNote Web 服务启动入口
 
 使用方式：
     cp .env.example .env        # 填入 API Keys
-    pip install -r requirements-web.txt
+    uv sync                     # 或：pip install -r requirements-web.txt
     python run_web.py           # 开发模式（热重载）
 
 生产环境：
