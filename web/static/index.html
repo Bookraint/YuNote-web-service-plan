@@ -48,7 +48,17 @@
       font-size: 18px;
     }
     header h1 { font-size: 17px; font-weight: 600; }
-    header span { font-size: 12px; color: var(--muted); margin-left: 4px; }
+    header span.sub { font-size: 12px; color: var(--muted); margin-left: 4px; }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .header-right span { cursor: pointer; }
+    #user-email { color: var(--accent); font-size: 12px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* ── Layout ── */
     main { padding: 16px; max-width: 680px; margin: 0 auto; }
@@ -60,8 +70,7 @@
       margin-bottom: 14px;
     }
     .card-title {
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 13px; font-weight: 600;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: .05em;
@@ -75,37 +84,66 @@
       padding: 32px 16px;
       text-align: center;
       cursor: pointer;
-      transition: border-color .2s, background .2s;
+      transition: border-color .2s, background .2s, border-style .2s;
     }
-    #drop-zone.drag-over {
-      border-color: var(--accent);
+    #drop-zone.drag-over { border-color: var(--accent); background: rgba(40,240,139,.06); }
+    #drop-zone.has-file {
+      border-style: solid;
+      border-color: rgba(40,240,139,.4);
       background: rgba(40,240,139,.06);
+      padding: 24px 16px;
     }
-    #drop-zone .icon { font-size: 36px; margin-bottom: 8px; }
-    #drop-zone p  { color: var(--muted); font-size: 14px; }
-    #drop-zone strong { color: var(--accent); }
+    #drop-zone.has-file.drag-over { background: rgba(40,240,139,.1); }
+    .dz-empty .icon { font-size: 36px; margin-bottom: 8px; }
+    .dz-empty p  { color: var(--muted); font-size: 14px; }
+    .dz-empty .dz-formats { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .dz-empty strong { color: var(--accent); }
+    #drop-zone.has-file .dz-empty { display: none; }
+    .dz-filled { display: none; }
+    #drop-zone.has-file .dz-filled { display: block; }
+    .dz-filled-icon { font-size: 40px; margin-bottom: 8px; line-height: 1; }
+    .dz-filled-title {
+      font-size: 12px; font-weight: 600; color: var(--accent);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+    }
+    #file-name.dz-file-name {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      word-break: break-all; line-height: 1.45; margin-bottom: 10px;
+    }
+    .dz-filled-hint { font-size: 12px; color: var(--muted); }
+    .dz-busy-note { display: none; font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+    #upload-card.job-busy .dz-filled-hint { display: none; }
+    #upload-card.job-busy .dz-busy-note { display: block; }
+    #upload-card.job-busy #drop-zone {
+      pointer-events: none;
+      cursor: not-allowed;
+      opacity: 0.72;
+    }
+    #upload-card.job-busy .options-row select {
+      pointer-events: none;
+      opacity: 0.55;
+    }
     #file-input { display: none; }
-    #file-name {
-      margin-top: 10px;
-      font-size: 13px;
-      color: var(--accent);
-      word-break: break-all;
+
+    #stop-job-btn {
+      width: 100%;
+      margin-top: 14px;
+      padding: 10px;
       display: none;
+      background: var(--surface2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
     }
+    #stop-job-btn:hover { border-color: var(--danger); color: var(--danger); }
+    .badge-stopped { background: rgba(136,136,136,.18); color: var(--muted); }
 
     /* ── Options row ── */
-    .options-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .field label {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 5px;
-    }
+    .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
     select {
       width: 100%;
       background: var(--surface2);
@@ -119,8 +157,8 @@
     }
     select:focus { outline: none; border-color: var(--accent); }
 
-    /* ── Submit button ── */
-    #submit-btn {
+    /* ── Buttons ── */
+    .btn-primary {
       width: 100%;
       margin-top: 16px;
       padding: 13px;
@@ -133,187 +171,120 @@
       cursor: pointer;
       transition: opacity .2s;
     }
-    #submit-btn:disabled { opacity: .4; cursor: not-allowed; }
-
-    /* ── Progress card ── */
-    #progress-card { display: none; }
-    .progress-bar-wrap {
+    .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-secondary {
+      width: 100%;
+      padding: 12px;
       background: var(--surface2);
-      border-radius: 100px;
-      height: 8px;
-      overflow: hidden;
-      margin-bottom: 10px;
-    }
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
-      border-radius: 100px;
-      transition: width .4s ease;
-      width: 0%;
-    }
-    .progress-info {
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-    }
-    #stage-text { color: var(--muted); }
-    #progress-pct { color: var(--accent); font-weight: 600; }
-    .status-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 100px;
-      font-size: 12px;
+      color: var(--text);
       font-weight: 600;
-      margin-top: 10px;
-    }
-    .badge-running  { background: rgba(40,240,139,.15); color: var(--accent); }
-    .badge-done     { background: rgba(40,240,139,.2);  color: var(--accent); }
-    .badge-failed   { background: rgba(240,90,40,.15);  color: var(--danger); }
-
-    /* ── Result tabs ── */
-    #result-card { display: none; }
-    .tab-bar {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 14px;
-      background: var(--surface2);
-      border-radius: 10px;
-      padding: 4px;
-    }
-    .tab-btn {
-      flex: 1;
-      padding: 8px;
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      border-radius: 7px;
       font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background .2s, color .2s;
-    }
-    .tab-btn.active {
-      background: var(--surface);
-      color: var(--text);
-    }
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
-
-    /* ── Text content ── */
-    .text-area {
-      background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 14px;
-      font-size: 14px;
-      line-height: 1.75;
-      max-height: 420px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: var(--text);
-    }
-
-    /* ── Markdown ── */
-    .markdown-body {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 16px;
-      max-height: 420px;
-      overflow-y: auto;
-      font-size: 14px;
-      line-height: 1.75;
-    }
-    .markdown-body h1,.markdown-body h2,.markdown-body h3 {
-      color: var(--accent);
-      margin: 14px 0 6px;
-      font-size: 15px;
-    }
-    .markdown-body h1 { font-size: 17px; }
-    .markdown-body p { margin-bottom: 8px; }
-    .markdown-body ul,.markdown-body ol {
-      padding-left: 20px;
-      margin-bottom: 8px;
-    }
-    .markdown-body li { margin-bottom: 4px; }
-    .markdown-body code {
-      background: var(--border);
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-    .markdown-body hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 14px 0;
-    }
-    .markdown-body input[type=checkbox] { margin-right: 5px; }
-
-    /* ── Download row ── */
-    .dl-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .dl-btn {
-      flex: 1;
-      padding: 9px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 13px;
-      text-align: center;
-      text-decoration: none;
       cursor: pointer;
       transition: border-color .2s;
     }
-    .dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-secondary:hover { border-color: var(--accent); }
 
-    /* ── History ── */
-    #history-card { display: none; }
-    .hist-item {
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
+    /* ── Progress card ── */
+    #progress-card { display: none; }
+    .progress-bar-wrap { background: var(--surface2); border-radius: 100px; height: 8px; overflow: hidden; margin-bottom: 10px; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 100px; transition: width .4s ease; width: 0%; }
+    .progress-info { display: flex; justify-content: space-between; font-size: 13px; }
+    #stage-text { color: var(--muted); }
+    #progress-pct { color: var(--accent); font-weight: 600; }
+    .status-badge { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; margin-top: 10px; }
+    .badge-running { background: rgba(40,240,139,.15); color: var(--accent); }
+    .badge-done    { background: rgba(40,240,139,.2);  color: var(--accent); }
+    .badge-failed  { background: rgba(240,90,40,.15);  color: var(--danger); }
+
+    /* ── Result tabs ── */
+    #result-card { display: none; }
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 14px; background: var(--surface2); border-radius: 10px; padding: 4px; }
+    .tab-btn { flex: 1; padding: 8px; border: none; background: transparent; color: var(--muted); border-radius: 7px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .2s, color .2s; }
+    .tab-btn.active { background: var(--surface); color: var(--text); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .text-area { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-size: 14px; line-height: 1.75; max-height: 420px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+
+    /* ── 转录原文：时间 / 说话人 / 正文 分色 ── */
+    .transcript-view.tr-rich {
+      white-space: normal;
+      padding: 10px 12px;
     }
-    .hist-item:last-child { border-bottom: none; }
-    .hist-name {
-      font-size: 14px;
+    .tr-row {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr);
+      gap: 8px 14px;
+      align-items: start;
+      padding: 12px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tr-row:last-child { border-bottom: none; }
+    .tr-row-no-spk { grid-template-columns: auto minmax(0, 1fr); }
+    @media (max-width: 520px) {
+      .tr-row { grid-template-columns: 1fr; }
+      .tr-row-no-spk { grid-template-columns: 1fr; }
+      .tr-time { grid-column: 1; }
+      .tr-speaker { grid-column: 1; }
+      .tr-text { grid-column: 1; }
+    }
+    .tr-time {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: #6eb3e8;
+      letter-spacing: 0.02em;
       white-space: nowrap;
+      padding-top: 3px;
+    }
+    .tr-speaker {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 8px;
+      white-space: nowrap;
+      max-width: 160px;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 65%;
     }
-    .hist-meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot-done   { background: var(--accent); }
-    .dot-failed { background: var(--danger); }
-    .dot-running { background: #f0c628; }
-
-    /* ── Error toast ── */
-    #toast {
-      position: fixed;
-      bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: var(--danger);
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 8px;
+    .tr-text {
+      color: var(--text);
+      line-height: 1.75;
+      word-break: break-word;
+      min-width: 0;
       font-size: 14px;
-      display: none;
-      z-index: 100;
-      max-width: 90vw;
-      text-align: center;
     }
+    .tr-spk-1 { background: rgba(40,240,139,.14); color: #8fffc4; border: 1px solid rgba(40,240,139,.35); }
+    .tr-spk-2 { background: rgba(120,170,255,.14); color: #b8d4ff; border: 1px solid rgba(120,170,255,.35); }
+    .tr-spk-3 { background: rgba(255,200,120,.12); color: #ffd9a3; border: 1px solid rgba(255,200,120,.35); }
+    .tr-spk-4 { background: rgba(220,140,255,.12); color: #e8c8ff; border: 1px solid rgba(220,140,255,.35); }
+    .tr-spk-5 { background: rgba(255,140,180,.12); color: #ffc8dc; border: 1px solid rgba(255,140,180,.35); }
+    .tr-spk-6 { background: rgba(140,230,220,.12); color: #b8fff5; border: 1px solid rgba(140,230,220,.35); }
+    .tr-spk-none {
+      visibility: hidden;
+      width: 0;
+      padding: 0;
+      margin: 0;
+      border: none;
+      overflow: hidden;
+    }
+    .markdown-body { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; max-height: 420px; overflow-y: auto; font-size: 14px; line-height: 1.75; }
+    .markdown-body h1,.markdown-body h2,.markdown-body h3 { color: var(--accent); margin: 14px 0 6px; font-size: 15px; }
+    .markdown-body h1 { font-size: 17px; }
+    .markdown-body p { margin-bottom: 8px; }
+    .markdown-body ul,.markdown-body ol { padding-left: 20px; margin-bottom: 8px; }
+    .markdown-body li { margin-bottom: 4px; }
+    .markdown-body code { background: var(--border); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+    .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+    .dl-row { display: flex; gap: 8px; margin-top: 12px; }
+    .dl-btn { flex: 1; padding: 9px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; text-align: center; text-decoration: none; cursor: pointer; transition: border-color .2s; }
+    .dl-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    /* ── Prompt 编辑弹层 ──
-       宽屏：居中卡片；窄屏：底部抽屉（微信里更顺手） */
-    #prompt-modal {
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--danger); color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 14px; display: none; z-index: 300; max-width: 90vw; text-align: center; }
+
+    /* ── Modal 通用 ── */
+    .modal-overlay {
       display: none;
       position: fixed;
       inset: 0;
@@ -322,125 +293,133 @@
       align-items: center;
       justify-content: center;
       padding: 20px 16px;
-      box-sizing: border-box;
     }
-    #prompt-modal.open { display: flex; }
-    .prompt-sheet {
+    .modal-overlay.open { display: flex; }
+    .modal-sheet {
       width: 100%;
-      max-width: 680px;
-      max-height: min(88dvh, 720px);
+      max-width: 480px;
       background: var(--surface);
       border-radius: 16px;
       border: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
       overflow: hidden;
       box-shadow: 0 16px 48px rgba(0,0,0,.45);
     }
-    @media (max-width: 640px) {
-      #prompt-modal {
-        align-items: flex-end;
-        padding: 0;
-      }
-      .prompt-sheet {
-        max-height: 92dvh;
-        border-radius: 16px 16px 0 0;
-        border-bottom: none;
-        box-shadow: none;
-      }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 15px;
     }
-    .prompt-head {
+    .modal-head button { background: none; border: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 4px 8px; }
+    .modal-body { padding: 20px 18px; }
+    @media (max-width: 640px) {
+      .modal-overlay { align-items: flex-end; padding: 0; }
+      .modal-sheet { max-width: 100%; border-radius: 16px 16px 0 0; border-bottom: none; }
+    }
+
+    /* ── 自定义 Prompt 折叠区 ── */
+    .prompt-toggle-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border);
-      font-weight: 600;
-    }
-    .prompt-head button {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 22px;
-      line-height: 1;
-      cursor: pointer;
-      padding: 4px 8px;
-    }
-    .prompt-hint {
-      font-size: 12px;
-      color: var(--muted);
-      padding: 10px 16px 0;
-      line-height: 1.5;
-    }
-    .prompt-hint code { color: var(--accent); font-size: 12px; }
-    #prompt-dir-hint {
-      font-size: 11px;
-      color: #666;
-      padding: 4px 16px 8px;
-      word-break: break-all;
-    }
-    .prompt-tab-bar { padding: 8px 12px 0; display: flex; gap: 4px; flex-wrap: wrap; }
-    .prompt-tab-bar button {
-      padding: 6px 12px;
+      margin-top: 14px;
+      padding: 8px 10px;
+      background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: var(--surface2);
-      color: var(--muted);
-      font-size: 13px;
       cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+      color: var(--muted);
+      transition: border-color .2s, color .2s;
     }
-    .prompt-tab-bar button.active {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: rgba(40,240,139,.08);
+    .prompt-toggle-row:hover { border-color: var(--accent); color: var(--text); }
+    .prompt-toggle-row .pt-label { display: flex; align-items: center; gap: 6px; }
+    .prompt-toggle-row .pt-badge {
+      font-size: 11px; background: rgba(40,240,139,.18);
+      color: var(--accent); border-radius: 4px; padding: 1px 6px; display: none;
     }
-    .prompt-ta-wrap {
-      flex: 1;
-      min-height: 200px;
-      padding: 10px 16px 16px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .prompt-ta {
+    .prompt-toggle-row .pt-badge.has-custom { display: inline; }
+    .prompt-toggle-row .pt-arrow { font-size: 11px; transition: transform .2s; }
+    .prompt-toggle-row.open .pt-arrow { transform: rotate(180deg); }
+    .prompt-editor-box {
       display: none;
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .prompt-editor-box.open { display: block; }
+    .prompt-editor-box textarea {
       width: 100%;
-      flex: 1;
-      min-height: 240px;
+      min-height: 160px;
       resize: vertical;
       background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
+      border: none;
+      padding: 12px 14px;
       color: var(--text);
       font-size: 13px;
-      line-height: 1.55;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      line-height: 1.6;
+      display: block;
     }
-    .prompt-ta.active { display: block; }
-    .prompt-actions {
-      display: flex;
-      gap: 10px;
-      padding: 0 16px 16px;
-    }
-    .prompt-actions button {
-      flex: 1;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-    }
-    .btn-save-prompt {
-      background: var(--accent);
-      color: #000;
-    }
-    .btn-cancel-prompt {
+    .prompt-editor-box textarea:focus { outline: none; }
+    .prompt-editor-box textarea.ta-error { box-shadow: inset 0 0 0 2px var(--danger); }
+    .prompt-editor-hint {
+      padding: 6px 14px 8px;
+      font-size: 11px;
+      color: var(--muted);
       background: var(--surface2);
-      color: var(--text);
-      border: 1px solid var(--border);
+      border-top: 1px solid var(--border);
     }
+    .prompt-editor-hint code { color: var(--accent); }
+    .prompt-warn {
+      display: none;
+      padding: 6px 14px 8px;
+      font-size: 12px;
+      color: var(--danger);
+      background: rgba(240,90,40,.08);
+      border-top: 1px solid rgba(240,90,40,.25);
+    }
+    .prompt-warn.show { display: block; }
+
+    /* ── 报价 modal ── */
+    .quote-summary { background: var(--surface2); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; font-size: 14px; }
+    .quote-summary .q-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .quote-summary .q-label { color: var(--muted); }
+    .quote-summary .q-value { font-weight: 600; }
+    .tier-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+    .tier-card {
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 12px;
+      cursor: pointer;
+      transition: border-color .2s;
+      text-align: center;
+    }
+    .tier-card.selected { border-color: var(--accent); background: rgba(40,240,139,.06); }
+    .tier-card .tier-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .tier-card .tier-price { color: var(--accent); font-size: 20px; font-weight: 700; }
+    .tier-card .tier-price small { font-size: 12px; color: var(--muted); }
+    .tier-card .tier-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── 兑换码输入 ── */
+    .redeem-row { margin-bottom: 18px; }
+    .redeem-row label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .redeem-input-wrap { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .2s; }
+    .redeem-input-wrap:focus-within { border-color: var(--accent); }
+    .redeem-input-wrap .redeem-icon { padding: 0 12px; display: flex; align-items: center; background: var(--surface2); font-size: 18px; flex-shrink: 0; }
+    .redeem-input-wrap input {
+      flex: 1; border: none; background: var(--surface2); color: var(--text);
+      font-size: 15px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      letter-spacing: .08em; padding: 12px 14px 12px 6px; outline: none;
+    }
+    .redeem-input-wrap input::placeholder { color: var(--muted); letter-spacing: 0; font-family: inherit; }
+    .redeem-input-wrap.has-error { border-color: var(--danger); }
+    .redeem-hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .redeem-hint a { color: var(--accent); text-decoration: none; }
+    .redeem-hint a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -448,25 +427,32 @@
 <header>
   <div class="logo">🎙</div>
   <div>
-    <h1>小宇笔记<span>YuNote</span></h1>
+    <h1>小宇笔记<span class="sub">YuNote</span></h1>
   </div>
-  <div style="margin-left:auto; display:flex; gap:18px; align-items:center; color:var(--muted); font-size:13px;">
-    <span style="cursor:pointer;" onclick="openPromptModal()">场景 Prompt</span>
-    <span style="cursor:pointer;" onclick="toggleHistory()">历史记录</span>
+  <div class="header-right">
+    <span style="color:var(--muted);font-size:12px;">一次付款 · 即用即得</span>
   </div>
 </header>
 
-<main>
+<main id="app">
 
   <!-- 上传卡片 -->
   <div class="card" id="upload-card">
     <div class="card-title">上传音频 / 视频</div>
 
     <div id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <div class="icon">🎵</div>
-      <p>点击选择文件，或将文件拖到此处</p>
-      <p style="margin-top:6px;font-size:12px;">支持 MP3 / MP4 / M4A / WAV / WEBM 等，最大 <strong id="max-size">500</strong> MB</p>
-      <div id="file-name"></div>
+      <div class="dz-empty">
+        <div class="icon">🎵</div>
+        <p>点击选择文件，或将文件拖到此处</p>
+        <p class="dz-formats">支持 MP3 / MP4 / M4A / WAV / WEBM 等，最大 <strong id="max-size">500</strong> MB</p>
+      </div>
+      <div class="dz-filled">
+        <div class="dz-filled-icon">📎</div>
+        <p class="dz-filled-title">已选择文件</p>
+        <div id="file-name" class="dz-file-name"></div>
+        <p class="dz-filled-hint">点击或拖入其他文件以更换</p>
+        <p class="dz-busy-note">处理中，无法更换文件。</p>
+      </div>
     </div>
     <input type="file" id="file-input" accept="audio/*,video/*" />
 
@@ -487,7 +473,7 @@
         </select>
       </div>
       <div class="field">
-        <label>笔记场景</label>
+        <label>AI 总结风格</label>
         <select id="scene-select">
           <option value="通用">通用</option>
           <option value="会议">会议</option>
@@ -497,20 +483,38 @@
       </div>
     </div>
 
-    <button id="submit-btn" onclick="submitJob()" disabled>选择文件后开始处理</button>
+    <!-- 自定义 Prompt 折叠区 -->
+    <div class="prompt-toggle-row" id="prompt-toggle" onclick="togglePromptEditor()">
+      <span class="pt-label">
+        ✏️ AI 提示词（展开可编辑，本次有效）
+        <span class="pt-badge" id="pt-badge">已修改</span>
+      </span>
+      <span class="pt-arrow">▼</span>
+    </div>
+    <div class="prompt-editor-box" id="prompt-editor-box">
+      <textarea id="prompt-ta" placeholder="加载中…" oninput="onPromptInput()" onblur="validatePromptTA()"></textarea>
+      <div class="prompt-warn" id="prompt-warn">⚠ 提示词必须包含 <code>{{transcript}}</code>，否则 AI 将无法接收到转录内容</div>
+      <div class="prompt-editor-hint">提示词模板随「AI 总结风格」切换 · 必须保留 <code>{{transcript}}</code> 占位符 · 清空内容恢复默认</div>
+    </div>
+
+    <button id="submit-btn" class="btn-primary" onclick="submitJob()" disabled>选择文件后开始处理</button>
+    <button type="button" id="new-job-btn" class="btn-secondary" style="display:none;margin-top:12px" onclick="startNewUploadFlow()">处理新文件</button>
   </div>
 
   <!-- 进度卡片 -->
   <div class="card" id="progress-card">
     <div class="card-title">处理进度</div>
-    <div class="progress-bar-wrap">
-      <div class="progress-bar-fill" id="progress-fill"></div>
+    <div id="progress-body">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-info">
+        <span id="stage-text">等待中…</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div id="status-badge" class="status-badge badge-running">处理中</div>
     </div>
-    <div class="progress-info">
-      <span id="stage-text">等待中…</span>
-      <span id="progress-pct">0%</span>
-    </div>
-    <div id="status-badge" class="status-badge badge-running">处理中</div>
+    <button type="button" id="stop-job-btn" onclick="stopCurrentJob()">停止处理</button>
   </div>
 
   <!-- 结果卡片 -->
@@ -519,99 +523,282 @@
       <button class="tab-btn active" onclick="switchTab('summary')">AI 总结</button>
       <button class="tab-btn" onclick="switchTab('transcript')">转录原文</button>
     </div>
-
     <div id="tab-summary" class="tab-pane active">
       <div id="summary-body" class="markdown-body">总结加载中…</div>
       <div class="dl-row">
         <a id="dl-summary" class="dl-btn" download>⬇ 下载总结 (.md)</a>
+      </div>
+    </div>
+    <div id="tab-transcript" class="tab-pane">
+      <div id="transcript-body" class="text-area transcript-view">转录加载中…</div>
+      <div class="dl-row">
         <a id="dl-transcript" class="dl-btn" download>⬇ 下载转录 (.txt)</a>
       </div>
     </div>
-
-    <div id="tab-transcript" class="tab-pane">
-      <div id="transcript-body" class="text-area">转录加载中…</div>
-    </div>
-  </div>
-
-  <!-- 历史记录 -->
-  <div class="card" id="history-card">
-    <div class="card-title" style="display:flex;justify-content:space-between;">
-      <span>历史记录</span>
-      <span style="cursor:pointer;font-size:12px;color:var(--muted);" onclick="toggleHistory()">收起</span>
-    </div>
-    <div id="history-list"></div>
   </div>
 
 </main>
 
 <div id="toast"></div>
 
-<!-- 场景 Prompt 编辑（保存到服务端 prompts 目录，下次总结即用） -->
-<div id="prompt-modal" onclick="if(event.target===this) closePromptModal()">
-  <div class="prompt-sheet" onclick="event.stopPropagation()">
-    <div class="prompt-head">
-      <span>编辑场景 Prompt</span>
-      <button type="button" onclick="closePromptModal()" aria-label="关闭">×</button>
+<!-- ══ 报价确认 Modal ══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="quote-modal" onclick="if(event.target===this) cancelQuote()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <span>确认报价</span>
+      <button type="button" onclick="cancelQuote()">×</button>
     </div>
-    <p class="prompt-hint">须含 <code>{{transcript}}</code>。保存 → 写入服务端磁盘（见下方路径的四个 <code>.md</code>，不经数据库），持久保存；下次打开本页或重启服务会自动载入。</p>
-    <p id="prompt-dir-hint"></p>
-    <div class="prompt-tab-bar">
-      <button type="button" class="active" data-prompt="general" onclick="switchPromptTab('general')">通用</button>
-      <button type="button" data-prompt="meeting" onclick="switchPromptTab('meeting')">会议</button>
-      <button type="button" data-prompt="lecture" onclick="switchPromptTab('lecture')">课程</button>
-      <button type="button" data-prompt="interview" onclick="switchPromptTab('interview')">访谈</button>
-    </div>
-    <div class="prompt-ta-wrap">
-      <textarea class="prompt-ta active" id="prompt-ta-general" placeholder="通用场景…"></textarea>
-      <textarea class="prompt-ta" id="prompt-ta-meeting" placeholder="会议场景…"></textarea>
-      <textarea class="prompt-ta" id="prompt-ta-lecture" placeholder="课程场景…"></textarea>
-      <textarea class="prompt-ta" id="prompt-ta-interview" placeholder="访谈场景…"></textarea>
-    </div>
-    <div class="prompt-actions">
-      <button type="button" class="btn-cancel-prompt" onclick="closePromptModal()">取消</button>
-      <button type="button" class="btn-save-prompt" onclick="savePrompts()">保存</button>
+    <div class="modal-body">
+      <div class="quote-summary" id="quote-summary">
+        <div class="q-row"><span class="q-label">文件时长</span><span class="q-value" id="q-duration">—</span></div>
+        <div class="q-row"><span class="q-label">计费分钟</span><span class="q-value" id="q-minutes">—</span></div>
+      </div>
+
+      <div class="tier-cards">
+        <div class="tier-card selected" id="tier-standard" onclick="selectTier('standard')">
+          <div class="tier-name">标准档</div>
+          <div class="tier-price" id="price-standard">—<small> 积分</small></div>
+          <div class="tier-desc">普通 LLM 模型</div>
+        </div>
+        <div class="tier-card" id="tier-premium" onclick="selectTier('premium')">
+          <div class="tier-name">高级档</div>
+          <div class="tier-price" id="price-premium">—<small> 积分</small></div>
+          <div class="tier-desc">更强 LLM 模型</div>
+        </div>
+      </div>
+
+      <div class="redeem-row">
+        <label>输入兑换码</label>
+        <div class="redeem-input-wrap" id="redeem-wrap">
+          <span class="redeem-icon">🎟</span>
+          <input type="text" id="redeem-code-input" placeholder="在第三方平台购买后填入"
+                 autocomplete="off" spellcheck="false"
+                 oninput="onRedeemInput()" />
+        </div>
+        <div class="redeem-hint">没有积分码？<a href="#" onclick="return false">前往购买</a>（积分码面值需 ≥ 所选档位消耗）</div>
+      </div>
+
+      <button class="btn-primary" id="confirm-pay-btn" onclick="confirmOrder()">兑换并开始处理</button>
+      <button class="btn-secondary" style="margin-top:10px" onclick="cancelQuote()">取消，重新选择文件</button>
     </div>
   </div>
 </div>
 
 <script>
-  // ── 配置 ─────────────────────────────────────────────────
-  const API = '';   // 同域，留空即可
+  const API = '';
 
-  // ── 状态 ─────────────────────────────────────────────────
-  let currentJobId = null;
-  let currentFile  = null;
-  let evtSource    = null;
+  // ── 工具 ──────────────────────────────────────────────────────
+  async function apiFetch(path, opts = {}) {
+    return fetch(API + path, opts);
+  }
 
-  // ── 文件选择 ──────────────────────────────────────────────
+  /** 解析 FastAPI HTTPException / 校验错误的 detail */
+  function apiErrorDetail(d, status) {
+    if (d && d.detail !== undefined && d.detail !== null) {
+      if (typeof d.detail === 'string') return d.detail;
+      if (Array.isArray(d.detail)) {
+        return d.detail.map(x => (x && x.msg) ? x.msg : JSON.stringify(x)).join('；');
+      }
+      if (typeof d.detail === 'object') return JSON.stringify(d.detail);
+    }
+    return `HTTP ${status}`;
+  }
+
+  function resetQuoteConfirmButton() {
+    const btn = document.getElementById('confirm-pay-btn');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.textContent = '兑换并开始处理';
+  }
+
+  // ── 状态 ──────────────────────────────────────────────────────
+  let currentJobId      = null;
+  let currentAccessToken = null;  // 支付成功后颁发，用于访问结果
+  let currentFile       = null;
+  let currentQuote      = null;
+  let selectedTier      = 'standard';
+  let evtSource         = null;
+  /** 上传 / 报价 / 处理进行中：禁止换文件，避免与当前任务混淆 */
+  let uploadLocked      = false;
+
+  function setUploadLocked(on) {
+    uploadLocked = !!on;
+    const card = document.getElementById('upload-card');
+    if (card) card.classList.toggle('job-busy', uploadLocked);
+  }
+
+  function setStopButtonVisible(show) {
+    const el = document.getElementById('stop-job-btn');
+    if (el) el.style.display = show ? 'block' : 'none';
+  }
+
+  // ── 初始化 ────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    // 清理历史遗留 URL 参数（如刷新前带有 job_id）
+    const params = new URLSearchParams(location.search);
+    if (params.has('job_id') || params.has('paid') || params.has('cancelled')) {
+      history.replaceState(null, '', '/');
+    }
+  });
+
+  // ── 自定义 Prompt ─────────────────────────────────────────────
+  // key: scene（通用/会议/课程/访谈），value: 用户覆盖的 prompt 文字；空串=用默认
+  const customPrompts = {};
+  let defaultPromptsCache = null;   // 从 /api/prompts 加载的默认值缓存
+  let promptEditorOpen = false;
+  let promptLoaded = false;
+
+  const _sceneKeyMap = { '通用': 'general', '会议': 'meeting', '课程': 'lecture', '访谈': 'interview' };
+
+  async function togglePromptEditor() {
+    promptEditorOpen = !promptEditorOpen;
+    document.getElementById('prompt-toggle').classList.toggle('open', promptEditorOpen);
+    document.getElementById('prompt-editor-box').classList.toggle('open', promptEditorOpen);
+    if (promptEditorOpen && !promptLoaded) {
+      promptLoaded = true;
+      const ta = document.getElementById('prompt-ta');
+      ta.placeholder = '加载默认提示词…';
+      try {
+        const res = await fetch(`${API}/api/prompts`);
+        defaultPromptsCache = await res.json();
+      } catch { defaultPromptsCache = {}; }
+      refreshPromptTextarea();
+    }
+  }
+
+  function refreshPromptTextarea() {
+    if (!promptEditorOpen || !defaultPromptsCache) return;
+    const scene = document.getElementById('scene-select').value;
+    const key = _sceneKeyMap[scene] || 'general';
+    const ta = document.getElementById('prompt-ta');
+    ta.placeholder = '（与默认相同，留空即用默认）';
+    ta.value = customPrompts[key] ?? (defaultPromptsCache[key] || '');
+  }
+
+  function onPromptInput() {
+    const scene = document.getElementById('scene-select').value;
+    const key = _sceneKeyMap[scene] || 'general';
+    const val = document.getElementById('prompt-ta').value;
+    const defaultVal = (defaultPromptsCache || {})[key] || '';
+    // 与默认相同或为空 → 不算自定义
+    if (!val.trim() || val === defaultVal) {
+      delete customPrompts[key];
+    } else {
+      customPrompts[key] = val;
+    }
+    const hasCustm = Object.keys(customPrompts).length > 0;
+    document.getElementById('pt-badge').classList.toggle('has-custom', hasCustm);
+    // 实时检测 {{transcript}} 是否存在
+    const missing = val.trim() && !val.includes('{{transcript}}');
+    document.getElementById('prompt-warn').classList.toggle('show', missing);
+    document.getElementById('prompt-ta').classList.toggle('ta-error', missing);
+  }
+
+  function validatePromptTA() {
+    const ta = document.getElementById('prompt-ta');
+    const val = ta.value;
+    if (!val.trim()) return;
+    if (!val.includes('{{transcript}}')) {
+      // 失焦且缺少占位符：不自动回退，保留用户输入并显示警告
+      document.getElementById('prompt-warn').classList.add('show');
+      ta.classList.add('ta-error');
+    } else {
+      document.getElementById('prompt-warn').classList.remove('show');
+      ta.classList.remove('ta-error');
+    }
+  }
+
+  // 场景切换时更新 textarea
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('scene-select').addEventListener('change', refreshPromptTextarea);
+  });
+
+  // ── 文件选择 ──────────────────────────────────────────────────
   const fileInput = document.getElementById('file-input');
   const dropZone  = document.getElementById('drop-zone');
   const fileName  = document.getElementById('file-name');
   const submitBtn = document.getElementById('submit-btn');
 
   fileInput.addEventListener('change', () => {
+    if (uploadLocked) {
+      fileInput.value = '';
+      return;
+    }
     if (fileInput.files[0]) setFile(fileInput.files[0]);
   });
-
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
+    if (uploadLocked) return;
     if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
   });
 
+  const newJobBtn = document.getElementById('new-job-btn');
+
+  /** 仅显示「上传并获取报价」主按钮（新任务按钮隐藏） */
+  function showUploadPrimaryCta() {
+    submitBtn.style.display = '';
+    newJobBtn.style.display = 'none';
+  }
+
+  /** 流程进行中或已结束：隐藏主上传按钮，避免重复提交 */
+  function hideUploadPrimaryCta() {
+    submitBtn.style.display = 'none';
+  }
+
+  /** 任务结束（成功或失败）：仅提供「处理新文件」，不提供二次处理同一任务 */
+  function showNewJobOnlyCta() {
+    document.getElementById('progress-card').style.display = 'none';
+    submitBtn.style.display = 'none';
+    newJobBtn.style.display = '';
+    setUploadLocked(false);
+    setStopButtonVisible(false);
+  }
+
   function setFile(f) {
+    if (uploadLocked) return;
     currentFile = f;
-    fileName.textContent = `📎 ${f.name}  (${(f.size / 1048576).toFixed(1)} MB)`;
-    fileName.style.display = 'block';
-    submitBtn.textContent = '开始转录与总结';
+    fileName.textContent = `${f.name}  ·  ${(f.size / 1048576).toFixed(1)} MB`;
+    dropZone.classList.add('has-file');
+    showUploadPrimaryCta();
+    submitBtn.textContent = '上传并获取报价';
     submitBtn.disabled = false;
   }
 
-  // ── 提交任务 ──────────────────────────────────────────────
+  function resetUploadState() {
+    currentFile  = null;
+    currentQuote = null;
+    selectedTier = 'standard';
+    fileName.textContent = '';
+    dropZone.classList.remove('has-file');
+    showUploadPrimaryCta();
+    submitBtn.disabled = true;
+    submitBtn.textContent = '选择文件后开始处理';
+    fileInput.value = '';
+    setUploadLocked(false);
+  }
+
+  /** 清空当前任务 UI，允许重新选择文件（等价于刷新后重新上传） */
+  function startNewUploadFlow() {
+    if (evtSource) {
+      evtSource.close();
+      evtSource = null;
+    }
+    currentJobId = null;
+    currentQuote = null;
+    selectedTier = 'standard';
+    setStopButtonVisible(false);
+    resetUploadState();
+    document.getElementById('progress-card').style.display = 'none';
+    document.getElementById('result-card').style.display = 'none';
+  }
+
+  // ── 提交（上传 + 获取报价）────────────────────────────────────
   async function submitJob() {
     if (!currentFile) return;
+    setUploadLocked(true);
     submitBtn.disabled = true;
     submitBtn.textContent = '上传中…';
 
@@ -621,79 +808,232 @@
     fd.append('scene',    document.getElementById('scene-select').value);
 
     try {
-      const res = await fetch(`${API}/api/jobs`, { method: 'POST', body: fd });
+      const res = await apiFetch('/api/jobs', { method: 'POST', body: fd });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
       const data = await res.json();
       currentJobId = data.job_id;
-      showProgress();
-      startSSE(data.job_id);
+      currentQuote = data;
+      showQuoteModal(data);
     } catch (e) {
       toast(`上传失败：${e.message}`);
+      setUploadLocked(false);
+      showUploadPrimaryCta();
       submitBtn.disabled = false;
-      submitBtn.textContent = '开始转录与总结';
+      submitBtn.textContent = '上传并获取报价';
     }
   }
 
-  // ── 进度展示 ──────────────────────────────────────────────
+  // ── 报价 Modal ────────────────────────────────────────────────
+  function showQuoteModal(data) {
+    const durMin = Math.floor((data.duration_sec || 0) / 60);
+    const durSec = Math.round((data.duration_sec || 0) % 60);
+    document.getElementById('q-duration').textContent = `${durMin} 分 ${durSec} 秒`;
+    document.getElementById('q-minutes').textContent  = `${data.billed_minutes} 分钟`;
+
+    document.getElementById('price-standard').innerHTML = `${data.credits_standard}<small> 积分</small>`;
+    document.getElementById('price-premium').innerHTML  = `${data.credits_premium}<small> 积分</small>`;
+
+    // 重置兑换码输入框
+    const inp = document.getElementById('redeem-code-input');
+    if (inp) { inp.value = ''; }
+    document.getElementById('redeem-wrap').classList.remove('has-error');
+
+    selectTier('standard');
+    resetQuoteConfirmButton();
+    document.getElementById('quote-modal').classList.add('open');
+    setUploadLocked(true);
+    hideUploadPrimaryCta();
+    newJobBtn.style.display = 'none';
+  }
+
+  function selectTier(tier) {
+    selectedTier = tier;
+    document.getElementById('tier-standard').classList.toggle('selected', tier === 'standard');
+    document.getElementById('tier-premium').classList.toggle('selected',  tier === 'premium');
+  }
+
+  function cancelQuote() {
+    document.getElementById('quote-modal').classList.remove('open');
+    resetQuoteConfirmButton();
+    resetUploadState();
+  }
+
+  function onRedeemInput() {
+    const inp = document.getElementById('redeem-code-input');
+    // 输入时清除错误状态
+    if (inp && inp.value.trim()) {
+      document.getElementById('redeem-wrap').classList.remove('has-error');
+    }
+  }
+
+  async function confirmOrder() {
+    if (!currentJobId) return;
+    // 如果提示词编辑区有错误（缺 {{transcript}}），阻止提交
+    if (document.getElementById('prompt-ta').classList.contains('ta-error')) {
+      toast('提示词中缺少 {{transcript}} 占位符，请补充后再提交');
+      return;
+    }
+    const redeemCode = (document.getElementById('redeem-code-input').value || '').trim();
+    if (!redeemCode) {
+      document.getElementById('redeem-wrap').classList.add('has-error');
+      document.getElementById('redeem-code-input').focus();
+      toast('请输入兑换码');
+      return;
+    }
+
+    const btn = document.getElementById('confirm-pay-btn');
+    btn.disabled = true;
+    btn.textContent = '验证中…';
+
+    const ac = new AbortController();
+    const slowTimer = setTimeout(() => ac.abort(), 30000);
+
+    try {
+      const res = await apiFetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: currentJobId,
+          tier: selectedTier,
+          redeem_code: redeemCode,
+          custom_prompts: customPrompts,
+        }),
+        signal: ac.signal,
+      });
+      let d = {};
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        try { d = await res.json(); } catch (_) { /* 空 body */ }
+      }
+      if (!res.ok) {
+        // 兑换码相关错误：高亮输入框
+        const errMsg = apiErrorDetail(d, res.status);
+        if (res.status === 400) {
+          document.getElementById('redeem-wrap').classList.add('has-error');
+        }
+        throw new Error(errMsg);
+      }
+
+      // 兑换成功：拿到 access_token，直接进入处理流程
+      currentAccessToken = d.access_token || null;
+      document.getElementById('quote-modal').classList.remove('open');
+      showProgress(false);
+      startSSE(currentJobId);
+    } catch (e) {
+      const msg = (e && e.name === 'AbortError')
+        ? '请求超时，请检查网络后重试'
+        : (e && e.message) ? e.message : String(e);
+      toast(`兑换失败：${msg}`);
+    } finally {
+      clearTimeout(slowTimer);
+      btn.disabled = false;
+      btn.textContent = '兑换并开始处理';
+    }
+  }
+
+  // ── 进度展示 ──────────────────────────────────────────────────
   function showProgress() {
     document.getElementById('progress-card').style.display = 'block';
     document.getElementById('result-card').style.display   = 'none';
+    document.getElementById('progress-body').style.display = 'block';
     setProgress(0, '等待中…', 'running');
+    setUploadLocked(true);
+    hideUploadPrimaryCta();
+    newJobBtn.style.display = 'none';
+    setStopButtonVisible(true);
     document.getElementById('upload-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function setProgress(pct, stage, status) {
-    const fill  = document.getElementById('progress-fill');
-    const pctEl = document.getElementById('progress-pct');
+    const fill    = document.getElementById('progress-fill');
+    const pctEl   = document.getElementById('progress-pct');
     const stageEl = document.getElementById('stage-text');
-    const badge = document.getElementById('status-badge');
-
+    const badge   = document.getElementById('status-badge');
     const safePct = Math.max(0, Math.min(100, pct));
-    fill.style.width = `${safePct}%`;
+    fill.style.width  = `${safePct}%`;
     pctEl.textContent = `${safePct}%`;
     stageEl.textContent = stage;
-
     badge.className = 'status-badge';
-    if (status === 'done') {
-      badge.classList.add('badge-done');
-      badge.textContent = '✅ 已完成';
-    } else if (status === 'failed') {
-      badge.classList.add('badge-failed');
-      badge.textContent = '❌ 处理失败';
-    } else {
-      badge.classList.add('badge-running');
-      badge.textContent = '⏳ 处理中';
-    }
+    if (status === 'done')   { badge.classList.add('badge-done');    badge.textContent = '✅ 已完成'; }
+    else if (status === 'failed') { badge.classList.add('badge-failed'); badge.textContent = '❌ 处理失败'; }
+    else if (status === 'cancelled') { badge.classList.add('badge-stopped'); badge.textContent = '已停止'; }
+    else                     { badge.classList.add('badge-running'); badge.textContent = '⏳ 处理中'; }
   }
 
-  // ── SSE 进度监听 ──────────────────────────────────────────
+  async function stopCurrentJob() {
+    if (!currentJobId) return;
+    try {
+      const res = await fetch(`${API}/api/jobs/${currentJobId}/cancel`, { method: 'POST' });
+      let d = {};
+      try { d = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(apiErrorDetail(d, res.status));
+    } catch (e) {
+      toast('停止失败：' + e.message);
+      return;
+    }
+    if (evtSource) {
+      evtSource.close();
+      evtSource = null;
+    }
+    const pollOnce = async () => {
+      try {
+        const r = await fetch(`${API}/api/jobs/${currentJobId}/status`);
+        if (!r.ok) return;
+        const job = await r.json();
+        if (job.status === 'cancelled') {
+          document.getElementById('progress-card').style.display = 'none';
+          clearUploadFileUi();
+          showNewJobOnlyCta();
+          toast('已停止', 'ok');
+          return;
+        }
+        if (job.status === 'done' || job.status === 'failed') return;
+        setTimeout(pollOnce, 600);
+      } catch { setTimeout(pollOnce, 1000); }
+    };
+    toast('正在停止…', 'ok');
+    setTimeout(pollOnce, 300);
+  }
+
+  // ── SSE 进度监听 ──────────────────────────────────────────────
   function startSSE(jobId) {
     if (evtSource) evtSource.close();
-    evtSource = new EventSource(`${API}/api/jobs/${jobId}/stream`);
+    const url = `${API}/api/jobs/${jobId}/stream`;
+    evtSource = new EventSource(url);
 
     evtSource.onmessage = e => {
-      if (!e.data || e.data.startsWith(':')) return;  // keepalive
+      if (!e.data || e.data.startsWith(':')) return;
       try {
         const msg = JSON.parse(e.data);
         if (msg.ping) return;
         const p = msg.progress ?? 0;
         const s = msg.stage   ?? '';
-
-        if (msg.__end__ || msg.status === 'done' || msg.status === 'failed') {
-          setProgress(p > 0 ? p : (msg.status === 'done' ? 100 : 0), s || (msg.status === 'done' ? '已完成' : '处理失败'), msg.status || (p === 100 ? 'done' : 'failed'));
+        if (msg.__end__ || msg.status === 'done' || msg.status === 'failed' || msg.status === 'cancelled') {
           evtSource.close();
+          const st = msg.status || (p === 100 ? 'done' : 'failed');
+          if (st === 'cancelled' || msg.status === 'cancelled') {
+            setProgress(0, s || '已停止', 'cancelled');
+            clearUploadFileUi();
+            showNewJobOnlyCta();
+            return;
+          }
+          if (st === 'failed' || msg.status === 'failed') {
+            setProgress(p > 0 ? p : 0, s || '处理失败', 'failed');
+            clearUploadFileUi();
+            showNewJobOnlyCta();
+            return;
+          }
+          setProgress(p > 0 ? p : (msg.status === 'done' ? 100 : 0), s || (msg.status === 'done' ? '已完成' : '处理失败'), st);
           if (msg.status === 'done' || p === 100) loadResult(jobId);
           return;
         }
         if (p >= 0) setProgress(p, s, 'running');
       } catch (_) {}
     };
-
     evtSource.onerror = () => {
-      // SSE 断开后轮询一次
       evtSource.close();
       setTimeout(() => pollJob(jobId), 1500);
     };
@@ -701,99 +1041,126 @@
 
   async function pollJob(jobId) {
     try {
-      const res = await fetch(`${API}/api/jobs/${jobId}`);
+      const res = await fetch(`${API}/api/jobs/${jobId}/status`);
       const job = await res.json();
+      if (job.status === 'cancelled') {
+        setProgress(0, job.stage || '已停止', 'cancelled');
+        clearUploadFileUi();
+        showNewJobOnlyCta();
+        return;
+      }
       setProgress(job.progress, job.stage, job.status);
       if (job.status === 'done') loadResult(jobId);
-      else if (job.status !== 'failed') setTimeout(() => pollJob(jobId), 2000);
-    } catch (_) {
-      setTimeout(() => pollJob(jobId), 3000);
-    }
+      else if (job.status === 'failed') {
+        clearUploadFileUi();
+        showNewJobOnlyCta();
+      } else setTimeout(() => pollJob(jobId), 2000);
+    } catch { setTimeout(() => pollJob(jobId), 3000); }
   }
 
-  // ── 加载结果 ──────────────────────────────────────────────
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatTranscriptClock(ms) {
+    if (ms == null || Number.isNaN(Number(ms))) return '00:00';
+    const total = Math.floor(Number(ms) / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  }
+
+  function speakerHueClass(speaker) {
+    if (!speaker) return 'tr-spk-none';
+    let h = 0;
+    for (let i = 0; i < speaker.length; i++) h = ((h * 31) + speaker.charCodeAt(i)) >>> 0;
+    return 'tr-spk-' + ((h % 6) + 1);
+  }
+
+  function renderTranscriptBody(d) {
+    const el = document.getElementById('transcript-body');
+    const segs = d.segments;
+    if (segs && Array.isArray(segs) && segs.length > 0) {
+      el.className = 'text-area transcript-view tr-rich';
+      const anySpk = segs.some(s => s && s.speaker);
+      el.innerHTML = segs.map(seg => {
+        const t0 = formatTranscriptClock(seg.start_ms);
+        const t1 = formatTranscriptClock(seg.end_ms);
+        const spk = seg.speaker;
+        const spkCls = speakerHueClass(spk);
+        const timeHtml = `<span class="tr-time">[${escapeHtml(t0)} – ${escapeHtml(t1)}]</span>`;
+        if (!anySpk) {
+          return `<div class="tr-row tr-row-no-spk">${timeHtml}<div class="tr-text">${escapeHtml(seg.text || '')}</div></div>`;
+        }
+        const spkHtml = spk
+          ? `<span class="tr-speaker ${spkCls}">${escapeHtml(spk)}</span>`
+          : '<span class="tr-speaker tr-spk-none" aria-hidden="true"></span>';
+        return `<div class="tr-row">${timeHtml}${spkHtml}<div class="tr-text">${escapeHtml(seg.text || '')}</div></div>`;
+      }).join('');
+      return;
+    }
+    el.className = 'text-area transcript-view';
+    el.textContent = d.text || '';
+  }
+
+  // ── 加载结果 ──────────────────────────────────────────────────
   async function loadResult(jobId) {
+    document.getElementById('progress-card').style.display = 'none';
+    setStopButtonVisible(false);
     document.getElementById('result-card').style.display = 'block';
     document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    // 设置下载链接
-    document.getElementById('dl-summary').href    = `${API}/api/jobs/${jobId}/summary/download`;
-    document.getElementById('dl-transcript').href = `${API}/api/jobs/${jobId}/transcript/download`;
+    const tok = currentAccessToken;
+    const tokenParam = tok ? `?token=${encodeURIComponent(tok)}` : '';
+    document.getElementById('dl-summary').href    = `${API}/api/jobs/${jobId}/summary/download${tokenParam}`;
+    document.getElementById('dl-transcript').href = `${API}/api/jobs/${jobId}/transcript/download${tokenParam}`;
 
-    // 加载总结
     try {
-      const r = await fetch(`${API}/api/jobs/${jobId}/summary`);
+      const r = await fetch(`${API}/api/jobs/${jobId}/summary${tokenParam}`);
       const d = await r.json();
       document.getElementById('summary-body').innerHTML = marked.parse(d.markdown || '');
     } catch (e) {
       document.getElementById('summary-body').textContent = '总结加载失败：' + e.message;
     }
-
-    // 加载转录
     try {
-      const r = await fetch(`${API}/api/jobs/${jobId}/transcript`);
+      const r = await fetch(`${API}/api/jobs/${jobId}/transcript${tokenParam}`);
       const d = await r.json();
-      document.getElementById('transcript-body').textContent = d.text || '';
+      renderTranscriptBody(d);
     } catch (e) {
-      document.getElementById('transcript-body').textContent = '转录加载失败：' + e.message;
+      const tb = document.getElementById('transcript-body');
+      tb.className = 'text-area transcript-view';
+      tb.textContent = '转录加载失败：' + e.message;
     }
 
-    // 重置提交按钮
-    submitBtn.disabled = false;
-    submitBtn.textContent = '重新处理';
+    clearUploadFileUi();
+    showNewJobOnlyCta();
   }
 
-  // ── Tab 切换 ──────────────────────────────────────────────
+  function clearUploadFileUi() {
+    currentFile = null;
+    fileInput.value = '';
+    fileName.textContent = '';
+    dropZone.classList.remove('has-file');
+  }
+
+  // ── Tab 切换 ──────────────────────────────────────────────────
   function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      const active = (i === 0 && name === 'summary') || (i === 1 && name === 'transcript');
-      b.classList.toggle('active', active);
+      b.classList.toggle('active', (i === 0 && name === 'summary') || (i === 1 && name === 'transcript'));
     });
     document.getElementById('tab-summary').classList.toggle('active',    name === 'summary');
     document.getElementById('tab-transcript').classList.toggle('active', name === 'transcript');
   }
 
-  // ── 历史记录 ──────────────────────────────────────────────
-  let historyOpen = false;
-
-  async function toggleHistory() {
-    historyOpen = !historyOpen;
-    const card = document.getElementById('history-card');
-    card.style.display = historyOpen ? 'block' : 'none';
-    if (historyOpen) await refreshHistory();
-  }
-
-  async function refreshHistory() {
-    try {
-      const res  = await fetch(`${API}/api/jobs`);
-      const jobs = await res.json();
-      const list = document.getElementById('history-list');
-      if (!jobs.length) { list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px 0;">暂无记录</p>'; return; }
-      list.innerHTML = jobs.map(j => `
-        <div class="hist-item" onclick="openHistoryJob('${j.job_id}')">
-          <div class="dot dot-${j.status === 'done' ? 'done' : j.status === 'failed' ? 'failed' : 'running'}"></div>
-          <div class="hist-name">${esc(j.filename || j.note_id)}</div>
-          <div class="hist-meta">${esc(j.stage || j.status)}</div>
-        </div>
-      `).join('');
-    } catch (e) {
-      document.getElementById('history-list').innerHTML = `<p style="color:var(--danger);font-size:13px;">加载失败</p>`;
-    }
-  }
-
-  async function openHistoryJob(jobId) {
-    currentJobId = jobId;
-    const res = await fetch(`${API}/api/jobs/${jobId}`);
-    const job = await res.json();
-    setProgress(job.progress, job.stage, job.status);
-    document.getElementById('progress-card').style.display = 'block';
-    if (job.status === 'done') loadResult(jobId);
-    else if (job.status !== 'failed') { startSSE(jobId); }
-    document.getElementById('upload-card').scrollIntoView({ behavior: 'smooth' });
-  }
-
-  // ── Toast ─────────────────────────────────────────────────
-  function toast(msg, kind) {
+  // ── Toast ─────────────────────────────────────────────────────
+  function toast(msg, kind = 'err') {
     const el = document.getElementById('toast');
     el.textContent = msg;
     el.style.background = kind === 'ok' ? 'var(--accent)' : 'var(--danger)';
@@ -802,67 +1169,6 @@
     setTimeout(() => { el.style.display = 'none'; }, 4000);
   }
 
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // ── 场景 Prompt 弹窗 ─────────────────────────────────────
-  function switchPromptTab(key) {
-    document.querySelectorAll('.prompt-tab-bar button').forEach(b => {
-      b.classList.toggle('active', b.getAttribute('data-prompt') === key);
-    });
-    ['general','meeting','lecture','interview'].forEach(k => {
-      const ta = document.getElementById('prompt-ta-' + k);
-      if (ta) ta.classList.toggle('active', k === key);
-    });
-  }
-
-  async function openPromptModal() {
-    document.getElementById('prompt-modal').classList.add('open');
-    try {
-      const res = await fetch(`${API}/api/prompts`);
-      if (!res.ok) throw new Error('加载失败');
-      const d = await res.json();
-      document.getElementById('prompt-ta-general').value   = d.general   || '';
-      document.getElementById('prompt-ta-meeting').value  = d.meeting   || '';
-      document.getElementById('prompt-ta-lecture').value  = d.lecture   || '';
-      document.getElementById('prompt-ta-interview').value = d.interview || '';
-      document.getElementById('prompt-dir-hint').textContent =
-        d.prompts_dir ? '保存目录：' + d.prompts_dir : '';
-      switchPromptTab('general');
-    } catch (e) {
-      toast('加载 Prompt 失败：' + e.message);
-    }
-  }
-
-  function closePromptModal() {
-    document.getElementById('prompt-modal').classList.remove('open');
-  }
-
-  async function savePrompts() {
-    const body = {
-      general:   document.getElementById('prompt-ta-general').value,
-      meeting:   document.getElementById('prompt-ta-meeting').value,
-      lecture:   document.getElementById('prompt-ta-lecture').value,
-      interview: document.getElementById('prompt-ta-interview').value,
-    };
-    try {
-      const res = await fetch(`${API}/api/prompts`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const msg = typeof err.detail === 'string' ? err.detail : (Array.isArray(err.detail) ? err.detail.map(x => x.msg || x).join('; ') : JSON.stringify(err.detail || err));
-        throw new Error(msg || `HTTP ${res.status}`);
-      }
-      toast('场景 Prompt 已保存，下次总结即生效', 'ok');
-      closePromptModal();
-    } catch (e) {
-      toast('保存失败：' + e.message);
-    }
-  }
 </script>
 </body>
 </html>

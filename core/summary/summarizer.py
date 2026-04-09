@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, List, Optional, cast
 
-from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError, OpenAI
 
 from core.entities import NoteSceneEnum, SummaryConfig
 from core.summary.chunker import split_into_chunks
@@ -35,19 +35,36 @@ _MAP_SYSTEM = (
 )
 
 
+class SummarizerCancelledError(RuntimeError):
+    """外部请求中断总结。"""
+
+
 class Summarizer:
+
+    # 类级别全局 RPM 状态：所有实例（跨 job）共用同一个滑动窗口，
+    # 确保 SUMMARY_MAP_RPM 是真正的全局上限而非每 job 的上限。
+    _global_rpm_times: list[float] = []
+    _global_rpm_lock: threading.Lock = threading.Lock()
 
     def __init__(self, config: SummaryConfig):
         self.config = config
+        to = getattr(config, "llm_timeout_sec", None) or 600.0
         self._client = OpenAI(
             api_key=config.llm_api_key or "sk-placeholder",
             base_url=config.llm_base_url or None,
+            timeout=max(30.0, float(to)),
         )
+        self._cancel_event: Optional[threading.Event] = None
+
+    def _check_cancel(self) -> None:
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            raise SummarizerCancelledError("用户中断了总结任务")
 
     def summarize(
         self,
         transcript: str,
         progress_callback: Optional[Callable[[int, str], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> str:
         """
         执行完整总结流程。
@@ -63,12 +80,27 @@ class Summarizer:
             if progress_callback:
                 progress_callback(p, msg)
 
+        self._cancel_event = cancel_event
         chunks = split_into_chunks(transcript, self.config.chunk_size)
         logger.info("分块数量: %d，总字符: %d", len(chunks), len(transcript))
 
         if len(chunks) == 1:
             _cb(10, "生成总结中…")
-            result = self._single_pass(transcript)
+            self._check_cancel()
+            stop_hb = threading.Event()
+
+            def _heartbeat():
+                waited = 0
+                while not stop_hb.wait(20):
+                    waited += 20
+                    _cb(10, f"生成总结中…（已等待 {waited}s，大模型仍在生成）")
+
+            hb = threading.Thread(target=_heartbeat, daemon=True)
+            hb.start()
+            try:
+                result = self._single_pass(transcript)
+            finally:
+                stop_hb.set()
             _cb(100, "总结完成")
             return result
 
@@ -76,6 +108,7 @@ class Summarizer:
         chunk_summaries = self._map_chunks_parallel(chunks, _cb)
 
         # Reduce 阶段
+        self._check_cancel()
         _cb(75, "整合生成最终总结…")
         merged = "\n\n".join(
             f"【片段 {i + 1} 摘要】\n{s}" for i, s in enumerate(chunk_summaries)
@@ -92,30 +125,32 @@ class Summarizer:
         """Map 阶段：顺序或线程池并发，共享 RPM 滑动窗口。"""
         n = len(chunks)
         workers = max(1, min(self.config.map_concurrency, n))
-        rpm_times: List[float] = []
-        rpm_lock = threading.Lock()
         progress_lock = threading.Lock()
         completed = 0
 
         def wait_rpm() -> None:
+            """全局 RPM 限流：所有 job 的 Map 请求共享同一个滑动窗口。"""
             limit = self.config.map_rpm
             if limit <= 0:
                 return
             window = 60.0
             while True:
-                with rpm_lock:
+                with Summarizer._global_rpm_lock:
                     now = time.time()
-                    rpm_times[:] = [t for t in rpm_times if now - t < window]
-                    if len(rpm_times) < limit:
-                        rpm_times.append(time.time())
+                    Summarizer._global_rpm_times[:] = [
+                        t for t in Summarizer._global_rpm_times if now - t < window
+                    ]
+                    if len(Summarizer._global_rpm_times) < limit:
+                        Summarizer._global_rpm_times.append(time.time())
                         return
-                    wait = window - (now - rpm_times[0])
+                    wait = window - (now - Summarizer._global_rpm_times[0])
                 if wait > 0:
                     time.sleep(wait)
                 else:
                     time.sleep(0.05)
 
         def map_one(idx: int, chunk: str) -> tuple[int, str]:
+            self._check_cancel()
             wait_rpm()
             summary = self._map_chunk(chunk)
             nonlocal completed
@@ -161,15 +196,53 @@ class Summarizer:
         return self._call_llm(system=self._get_system_prompt(), user=prompt)
 
     def _call_llm(self, system: str, user: str) -> str:
-        response = self._client.chat.completions.create(
-            model=self.config.llm_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.3,
-        )
-        return response.choices[0].message.content or ""
+        self._check_cancel()
+        to = getattr(self.config, "llm_timeout_sec", None) or 600.0
+
+        _result: list = [None]
+        _error: list = [None]
+        _done = threading.Event()
+
+        def _run() -> None:
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.config.llm_model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user",   "content": user},
+                    ],
+                    temperature=0.3,
+                )
+                _result[0] = resp.choices[0].message.content or ""
+            except Exception as exc:
+                _error[0] = exc
+            finally:
+                _done.set()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+        # 每 0.5s 轮询一次取消状态，而不是死等 HTTP 返回
+        while not _done.wait(timeout=0.5):
+            self._check_cancel()
+
+        # HTTP 已返回，再检查一次（防止 HTTP 返回和取消信号同时到达）
+        self._check_cancel()
+
+        if _error[0] is not None:
+            exc = _error[0]
+            if isinstance(exc, APITimeoutError):
+                raise RuntimeError(
+                    f"大模型请求超时（>{to:.0f}s）。可在环境变量 LLM_REQUEST_TIMEOUT_SEC 调大，"
+                    "或检查网络与 API 额度。"
+                ) from exc
+            if isinstance(exc, APIConnectionError):
+                raise RuntimeError(
+                    "无法连接大模型服务，请检查网络、LLM_BASE_URL 与代理设置。"
+                ) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        return _result[0]
 
     def _get_system_prompt(self) -> str:
         return "你是专业的笔记整理助手，擅长将音频转录内容整理为结构清晰的 Markdown 笔记。"

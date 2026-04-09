@@ -348,6 +348,7 @@ class SummaryConfig:
     map_concurrency: int = 3       # Map 阶段同时请求数（1=顺序）
     map_rpm: int = 60              # Map 阶段 API 每分钟请求上限；0=不限
     prompts_path: str = ""          # resource/prompts/ 路径
+    llm_timeout_sec: float = 600.0  # 单次 chat.completions 请求超时（秒），避免永久挂起
 
     def _mask_key(self, key: str) -> str:
         if not key or len(key) <= 12:
