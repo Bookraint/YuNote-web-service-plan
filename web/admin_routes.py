@@ -6,7 +6,7 @@ import string
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from . import settings as cfg
@@ -113,6 +113,39 @@ def get_stock(request: Request):
     return {
         "total_available": sum(v["available"] for v in summary.values()),
         "by_credits": sorted(summary.values(), key=lambda x: x["credits"]),
+    }
+
+
+# ── 分页列出兑换码（监控用）───────────────────────────────────────
+
+@router.get("/codes")
+def list_codes(
+    request: Request,
+    status: Optional[str] = Query(
+        default=None,
+        description="按状态筛选：unused / used，不传则全部",
+    ),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """按创建时间倒序列出兑换码，供管理后台分页查看。"""
+    _require_admin(request)
+
+    db = get_db()
+    q = db.table("redeem_codes").select("*")
+    if status in ("unused", "used"):
+        q = q.eq("status", status)
+    res = (
+        q.order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
+    rows = res.data or []
+    return {
+        "items":    rows,
+        "limit":    limit,
+        "offset":   offset,
+        "returned": len(rows),
     }
 
 

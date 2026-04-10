@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YuNote 兑换码管理（本地）</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --border: #2d3a4d;
+      --text: #e6edf3;
+      --muted: #8b9cb3;
+      --accent: #58a6ff;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --danger: #f85149;
+      --mono: ui-monospace, "Cascadia Code", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      max-width: 1100px;
+      margin-inline: auto;
+    }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 8px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+    .banner {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+    .banner.err { border-color: var(--danger); color: #ffb4b0; }
+    .banner.ok { border-color: var(--ok); color: #acf2bd; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    section h2 {
+      margin: 0 0 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 12px; }
+    .field { flex: 1; min-width: 120px; }
+    input, select, button {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0d1117;
+      color: var(--text);
+      padding: 8px 12px;
+    }
+    input:focus, select:focus { outline: 1px solid var(--accent); }
+    button {
+      cursor: pointer;
+      background: #21262d;
+      border-color: var(--border);
+      font-weight: 500;
+    }
+    button.primary { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 500; }
+    code, .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+    .tag-unused { background: #23863633; color: var(--ok); }
+    .tag-used { background: #6e768166; color: var(--muted); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+    pre.out {
+      margin: 12px 0 0;
+      padding: 12px;
+      background: #0d1117;
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 280px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>YuNote 兑换码管理</h1>
+  <p class="sub">本页仅通过本机服务转发请求，密钥不写入浏览器。请先运行 <code>python scripts/redeem_admin_portal/run_portal.py</code></p>
+  <div id="banner" class="banner" style="display:none"></div>
+
+  <section>
+    <h2>连接状态</h2>
+    <p id="cfg-line" class="mono" style="margin:0;font-size:13px;color:var(--muted)">加载中…</p>
+  </section>
+
+  <section>
+    <h2>批量生成</h2>
+    <div class="row">
+      <div class="field">
+        <label>数量</label>
+        <input type="number" id="g-count" min="1" max="500" value="50" />
+      </div>
+      <div class="field">
+        <label>面值（积分）</label>
+        <input type="number" id="g-credits" min="1" value="500" />
+      </div>
+      <div class="field">
+        <label>前缀</label>
+        <input type="text" id="g-prefix" value="YU" maxlength="8" />
+      </div>
+      <button type="button" class="primary" id="btn-gen">一键生成</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:0">生成结果会出现在下方 JSON，请自行保存；服务端不落本地副本。</p>
+    <pre class="out" id="gen-out" style="display:none"></pre>
+  </section>
+
+  <section>
+    <h2>库存统计</h2>
+    <div class="toolbar">
+      <button type="button" id="btn-stock">刷新统计</button>
+    </div>
+    <div id="stock-wrap"></div>
+  </section>
+
+  <section>
+    <h2>兑换码列表</h2>
+    <div class="toolbar">
+      <label style="display:flex;align-items:center;gap:8px;margin:0">
+        状态
+        <select id="list-status">
+          <option value="">全部</option>
+          <option value="unused">未使用</option>
+          <option value="used">已使用</option>
+        </select>
+      </label>
+      <div class="field" style="max-width:90px">
+        <label>每页条数</label>
+        <input type="number" id="list-limit" min="10" max="500" value="100" />
+      </div>
+      <div class="field" style="max-width:90px">
+        <label>偏移</label>
+        <input type="number" id="list-offset" min="0" value="0" />
+      </div>
+      <button type="button" id="btn-list">查询</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>兑换码</th>
+            <th>面值</th>
+            <th>状态</th>
+            <th>使用任务</th>
+            <th>创建时间</th>
+            <th>使用时间</th>
+          </tr>
+        </thead>
+        <tbody id="list-body"></tbody>
+      </table>
+    </div>
+    <p id="list-meta" style="font-size:12px;color:var(--muted);margin:10px 0 0"></p>
+  </section>
+
+  <section>
+    <h2>恢复未使用（退款 / 误用）</h2>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 10px">将<strong>已使用</strong>的码改回 <code>unused</code>（与主服务 <code>POST /api/admin/codes/void</code> 一致）。</p>
+    <div class="row">
+      <div class="field" style="flex:2">
+        <label>完整兑换码</label>
+        <input type="text" id="void-code" placeholder="YU-XXXX-XXXX-XXXX" />
+      </div>
+      <button type="button" id="btn-void">提交</button>
+    </div>
+    <pre class="out" id="void-out" style="display:none"></pre>
+  </section>
+
+  <script>
+    const banner = document.getElementById('banner');
+    function showBanner(text, isErr) {
+      banner.style.display = 'block';
+      banner.textContent = text;
+      banner.className = 'banner ' + (isErr ? 'err' : 'ok');
+    }
+    function hideBanner() {
+      banner.style.display = 'none';
+    }
+
+    async function loadConfig() {
+      try {
+        const r = await fetch('/config');
+        const d = await r.json();
+        const line = document.getElementById('cfg-line');
+        if (!d.admin_configured) {
+          line.textContent = '未配置 ADMIN_KEY（.env），无法调用远端。';
+          line.style.color = 'var(--danger)';
+          return;
+        }
+        line.innerHTML = '转发目标：<strong style="color:var(--text)">' + escapeHtml(d.api_base) + '</strong>';
+      } catch (e) {
+        document.getElementById('cfg-line').textContent = '无法读取 /config：' + e.message;
+      }
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    document.getElementById('btn-gen').addEventListener('click', async () => {
+      hideBanner();
+      const count = parseInt(document.getElementById('g-count').value, 10);
+      const credits = parseInt(document.getElementById('g-credits').value, 10);
+      const prefix = (document.getElementById('g-prefix').value || 'YU').trim();
+      const btn = document.getElementById('btn-gen');
+      btn.disabled = true;
+      const out = document.getElementById('gen-out');
+      out.style.display = 'block';
+      out.textContent = '请求中…';
+      try {
+        const r = await fetch('/api/codes/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count, credits, prefix }),
+        });
+        const data = await r.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        if (!r.ok) showBanner(data.detail || '生成失败', true);
+        else showBanner('已生成 ' + (data.generated || 0) + ' 条', false);
+      } catch (e) {
+        out.textContent = String(e);
+        showBanner(e.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    async function refreshStock() {
+      hideBanner();
+      const wrap = document.getElementById('stock-wrap');
+      wrap.innerHTML = '加载中…';
+      try {
+        const r = await fetch('/api/stock');
+        const data = await r.json();
+        if (!r.ok) {
+          wrap.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(JSON.stringify(data.detail || data)) + '</p>';
+          return;
+        }
+        const rows = (data.by_credits || []).map(
+          (x) =>
+            '<tr><td>' +
+            x.credits +
+            '</td><td>' +
+            x.available +
+            '</td><td>' +
+            x.consumed +
+            '</td></tr>'
+        );
+        wrap.innerHTML =
+          '<p style="margin:0 0 8px;font-size:13px">未使用合计：<strong>' +
+          (data.total_available ?? 0) +
+          '</strong></p>' +
+          '<table><thead><tr><th>面值</th><th>未使用</th><th>已使用</th></tr></thead><tbody>' +
+          rows.join('') +
+          '</tbody></table>';
+      } catch (e) {
+        wrap.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(e.message) + '</p>';
+      }
+    }
+
+    document.getElementById('btn-stock').addEventListener('click', refreshStock);
+
+    async function loadList() {
+      hideBanner();
+      const status = document.getElementById('list-status').value;
+      const limit = parseInt(document.getElementById('list-limit').value, 10);
+      const offset = parseInt(document.getElementById('list-offset').value, 10);
+      const body = document.getElementById('list-body');
+      const meta = document.getElementById('list-meta');
+      body.innerHTML = '<tr><td colspan="6">加载中…</td></tr>';
+      const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (status) q.set('status', status);
+      try {
+        const r = await fetch('/api/codes/list?' + q.toString());
+        const data = await r.json();
+        if (!r.ok) {
+          body.innerHTML = '<tr><td colspan="6" style="color:var(--danger)">' + escapeHtml(JSON.stringify(data.detail || data)) + '</td></tr>';
+          return;
+        }
+        const items = data.items || [];
+        meta.textContent =
+          '本页 ' + items.length + ' 条（limit=' + data.limit + ', offset=' + data.offset + '）';
+        if (items.length === 0) {
+          body.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">无数据</td></tr>';
+          return;
+        }
+        body.innerHTML = items
+          .map((row) => {
+            const st = row.status === 'unused' ? 'unused' : 'used';
+            const tag =
+              row.status === 'unused'
+                ? '<span class="tag tag-unused">未使用</span>'
+                : '<span class="tag tag-used">已使用</span>';
+            return (
+              '<tr><td class="mono">' +
+              escapeHtml(row.code) +
+              '</td><td>' +
+              row.credits +
+              '</td><td>' +
+              tag +
+              '</td><td class="mono">' +
+              escapeHtml(row.used_by_job_id || '—') +
+              '</td><td>' +
+              escapeHtml((row.created_at || '').slice(0, 19)) +
+              '</td><td>' +
+              escapeHtml((row.used_at || '—').toString().slice(0, 19)) +
+              '</td></tr>'
+            );
+          })
+          .join('');
+      } catch (e) {
+        body.innerHTML = '<tr><td colspan="6" style="color:var(--danger)">' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    document.getElementById('btn-list').addEventListener('click', loadList);
+
+    document.getElementById('btn-void').addEventListener('click', async () => {
+      hideBanner();
+      const code = (document.getElementById('void-code').value || '').trim();
+      const out = document.getElementById('void-out');
+      if (!code) {
+        showBanner('请填写兑换码', true);
+        return;
+      }
+      out.style.display = 'block';
+      out.textContent = '请求中…';
+      try {
+        const r = await fetch('/api/codes/void', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const data = await r.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        if (!r.ok) showBanner(data.detail || '失败', true);
+        else {
+          showBanner('已处理', false);
+          refreshStock();
+          loadList();
+        }
+      } catch (e) {
+        out.textContent = String(e);
+        showBanner(e.message, true);
+      }
+    });
+
+    loadConfig();
+    refreshStock();
+    loadList();
+  </script>
+</body>
+</html>
