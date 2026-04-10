@@ -89,6 +89,37 @@
     .tag-unused { background: #23863633; color: var(--ok); }
     .tag-used { background: #6e768166; color: var(--muted); }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+    /* 列表筛选：避免 .field 的 flex:1 把按钮挤到输入框上 */
+    .list-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px 16px;
+      margin-bottom: 10px;
+    }
+    .list-toolbar .filter-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 0 0 auto;
+      min-width: 0;
+    }
+    .list-toolbar .filter-item label {
+      margin: 0;
+      white-space: nowrap;
+    }
+    .list-toolbar .filter-item select,
+    .list-toolbar .filter-item input[type="number"] {
+      width: auto;
+      min-width: 5.5rem;
+    }
+    .list-toolbar #list-limit { width: 5rem; }
+    .list-toolbar #list-offset { width: 5rem; }
+    .list-toolbar #btn-list {
+      flex: 0 0 auto;
+      padding-left: 18px;
+      padding-right: 18px;
+    }
     pre.out {
       margin: 12px 0 0;
       padding: 12px;
@@ -143,21 +174,21 @@
 
   <section>
     <h2>兑换码列表</h2>
-    <div class="toolbar">
-      <label style="display:flex;align-items:center;gap:8px;margin:0">
-        状态
+    <div class="list-toolbar">
+      <div class="filter-item">
+        <label for="list-status">状态</label>
         <select id="list-status">
           <option value="">全部</option>
           <option value="unused">未使用</option>
           <option value="used">已使用</option>
         </select>
-      </label>
-      <div class="field" style="max-width:90px">
-        <label>每页条数</label>
+      </div>
+      <div class="filter-item">
+        <label for="list-limit">每页条数</label>
         <input type="number" id="list-limit" min="10" max="500" value="100" />
       </div>
-      <div class="field" style="max-width:90px">
-        <label>偏移</label>
+      <div class="filter-item">
+        <label for="list-offset">偏移</label>
         <input type="number" id="list-offset" min="0" value="0" />
       </div>
       <button type="button" id="btn-list">查询</button>
@@ -170,8 +201,8 @@
             <th>面值</th>
             <th>状态</th>
             <th>使用任务</th>
-            <th>创建时间</th>
-            <th>使用时间</th>
+            <th>创建时间（北京时间）</th>
+            <th>使用时间（北京时间）</th>
           </tr>
         </thead>
         <tbody id="list-body"></tbody>
@@ -224,6 +255,34 @@
       const d = document.createElement('div');
       d.textContent = s;
       return d.innerHTML;
+    }
+
+    /** 后端多为 UTC 的 isoformat，无时区后缀时按 UTC 解析，再显示为北京时间 */
+    function parseUtcLike(s) {
+      if (s == null || s === '') return null;
+      const raw = String(s).trim();
+      if (!raw || raw === '—') return null;
+      let iso = raw.replace(' ', 'T');
+      if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)) {
+        iso += 'Z';
+      }
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function formatBeijingTime(s) {
+      const d = parseUtcLike(s);
+      if (!d) return '—';
+      return d.toLocaleString('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
     }
 
     document.getElementById('btn-gen').addEventListener('click', async () => {
@@ -330,9 +389,9 @@
               '</td><td class="mono">' +
               escapeHtml(row.used_by_job_id || '—') +
               '</td><td>' +
-              escapeHtml((row.created_at || '').slice(0, 19)) +
+              escapeHtml(formatBeijingTime(row.created_at)) +
               '</td><td>' +
-              escapeHtml((row.used_at || '—').toString().slice(0, 19)) +
+              escapeHtml(row.used_at != null && row.used_at !== '' ? formatBeijingTime(row.used_at) : '—') +
               '</td></tr>'
             );
           })
