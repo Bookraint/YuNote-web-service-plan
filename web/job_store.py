@@ -11,6 +11,13 @@ from .db import get_db, reset_db
 logger = logging.getLogger(__name__)
 
 
+def _is_transient_supabase_error(exc: BaseException) -> bool:
+    """连接被断开、协议层中断等可通过对 supabase 客户端 reset 后重试一次。"""
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    return "RemoteProtocolError" in name or "disconnect" in msg or "ReadError" in name
+
+
 def _new_access_token() -> str:
     return secrets.token_urlsafe(24)
 
@@ -44,7 +51,14 @@ class JobStore:
             "created_at":       now,
             "updated_at":       now,
         }
-        get_db().table("jobs").insert(row).execute()
+        try:
+            get_db().table("jobs").insert(row).execute()
+        except Exception as e:
+            if _is_transient_supabase_error(e):
+                logger.warning("Supabase 连接断开，正在重试 insert job_id=%s", job_id)
+                reset_db().table("jobs").insert(row).execute()
+            else:
+                raise
         return row
 
     def update(self, job_id: str, **kwargs) -> None:
@@ -53,7 +67,7 @@ class JobStore:
             get_db().table("jobs").update(kwargs).eq("job_id", job_id).execute()
         except Exception as e:
             # 连接断开时重置并重试一次
-            if "RemoteProtocolError" in type(e).__name__ or "disconnect" in str(e).lower():
+            if _is_transient_supabase_error(e):
                 logger.warning("Supabase 连接断开，正在重试 update job_id=%s", job_id)
                 reset_db().table("jobs").update(kwargs).eq("job_id", job_id).execute()
             else:
@@ -66,16 +80,43 @@ class JobStore:
         return token
 
     def get(self, job_id: str) -> Optional[dict]:
-        res = get_db().table("jobs").select("*").eq("job_id", job_id).execute()
+        try:
+            res = get_db().table("jobs").select("*").eq("job_id", job_id).execute()
+        except Exception as e:
+            if _is_transient_supabase_error(e):
+                logger.warning("Supabase 连接断开，正在重试 get job_id=%s", job_id)
+                res = (
+                    reset_db()
+                    .table("jobs")
+                    .select("*")
+                    .eq("job_id", job_id)
+                    .execute()
+                )
+            else:
+                raise
         return res.data[0] if res.data else None
 
     def list_all(self) -> list[dict]:
-        res = (
-            get_db()
-            .table("jobs")
-            .select("*")
-            .order("created_at", desc=True)
-            .limit(100)
-            .execute()
-        )
+        try:
+            res = (
+                get_db()
+                .table("jobs")
+                .select("*")
+                .order("created_at", desc=True)
+                .limit(100)
+                .execute()
+            )
+        except Exception as e:
+            if _is_transient_supabase_error(e):
+                logger.warning("Supabase 连接断开，正在重试 list_all")
+                res = (
+                    reset_db()
+                    .table("jobs")
+                    .select("*")
+                    .order("created_at", desc=True)
+                    .limit(100)
+                    .execute()
+                )
+            else:
+                raise
         return res.data or []
