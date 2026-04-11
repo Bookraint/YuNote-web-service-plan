@@ -1,0 +1,36 @@
+# 当向 GitHub 的 ms 分支推送时，同步推送到魔搭创空间仓库
+# （与本地 git remote「modelscope」指向的仓库一致）
+#
+# 在仓库 Settings → Secrets and variables → Actions 中新增：
+#   MODELSCOPE_GIT_TOKEN  魔搭 Git 凭据中的令牌（与 HTTPS URL 里 oauth2: 后面的 ms-... 相同）
+#
+# 勿将令牌写入代码或 workflow 明文；若令牌曾泄露请尽快在魔搭侧重置。
+
+name: Push ms to ModelScope
+
+on:
+  push:
+    branches: [ms]
+  workflow_dispatch:
+
+jobs:
+  push-modelscope:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ms
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ms
+
+      - name: Push to ModelScope studio
+        env:
+          MS_GIT_TOKEN: ${{ secrets.MODELSCOPE_GIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MS_GIT_TOKEN:-}" ]; then
+            echo "::error::未配置 MODELSCOPE_GIT_TOKEN。请在仓库 Actions Secrets 中设置魔搭 Git 令牌。"
+            exit 1
+          fi
+          REMOTE="https://oauth2:${MS_GIT_TOKEN}@www.modelscope.cn/studios/tsy777/YuNote.git"
+          git push "${REMOTE}" ms:ms
