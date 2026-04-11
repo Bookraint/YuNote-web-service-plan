@@ -152,12 +152,7 @@ def proxy_cleanup(body: dict):
         return JSONResponse(
             status_code=404,
             content={
-                "detail": (
-                    "远端返回 404：该地址上还没有「清理已核销」接口。"
-                    "请把 YuNote 主服务部署为包含 POST /api/admin/codes/cleanup 的版本；"
-                    "或在项目根目录启动最新主服务后，将 .env 里 YUNOTE_API_BASE 改为 http://127.0.0.1:7860（或你的本地端口）再试。"
-                ),
-                "upstream_url": url,
+                "detail": "主服务暂无清理接口：请升级部署或把 YUNOTE_API_BASE 指到已更新的主服务。",
             },
         )
     return _forward_response(r)
