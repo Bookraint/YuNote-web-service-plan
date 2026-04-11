@@ -212,6 +212,25 @@
   </section>
 
   <section>
+    <h2>清理已核销的旧记录</h2>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 10px">
+      仅删除 <strong>已使用</strong> 的行，减小库表体积；<strong>未使用</strong>的码不会删。填 <strong>0</strong> 表示清空全部已核销记录（不按天数）；填正整数则只删「使用时间」早于「今天 − N 天」的记录。订单里仍保存兑换码明文，删表行不影响订单记录。建议先预览再确认删除。
+    </p>
+    <p style="font-size:12px;color:var(--warn);margin:0 0 10px">
+      若预览结果里出现 <code class="mono">Not Found</code> / 404：说明当前 <code class="mono">YUNOTE_API_BASE</code> 指向的<strong>主服务版本过旧</strong>，还没有清理接口；需部署最新代码，或本地启动主服务并把 API 地址指到本机。
+    </p>
+    <div class="row">
+      <div class="field">
+        <label for="cleanup-days">天（0=全部已使用）</label>
+        <input type="number" id="cleanup-days" min="0" max="3650" value="30" />
+      </div>
+      <button type="button" id="btn-cleanup-preview">预览数量</button>
+      <button type="button" id="btn-cleanup-run" style="border-color:var(--danger);color:#ffb4b0">确认删除</button>
+    </div>
+    <pre class="out" id="cleanup-out" style="display:none"></pre>
+  </section>
+
+  <section>
     <h2>恢复未使用（退款 / 误用）</h2>
     <p style="font-size:13px;color:var(--muted);margin:0 0 10px">将<strong>已使用</strong>的码改回 <code>unused</code>（与主服务 <code>POST /api/admin/codes/void</code> 一致）。</p>
     <div class="row">
@@ -402,6 +421,67 @@
     }
 
     document.getElementById('btn-list').addEventListener('click', loadList);
+
+    async function runCleanup(dryRun) {
+      hideBanner();
+      const days = parseInt(document.getElementById('cleanup-days').value, 10);
+      if (!Number.isFinite(days) || days < 0) {
+        showBanner('请填写有效天数（0 表示全部已使用，正整数表示早于 N 天）', true);
+        return;
+      }
+      if (!dryRun) {
+        const ok = window.confirm(
+          days === 0
+            ? '将永久删除数据库中「全部已使用」的兑换码记录（未使用的码不受影响）。确定执行？'
+            : '将永久删除数据库中「已使用」且使用时间早于 ' +
+                days +
+                ' 天的兑换码记录（未使用的码不受影响）。确定执行？'
+        );
+        if (!ok) return;
+      }
+      const out = document.getElementById('cleanup-out');
+      out.style.display = 'block';
+      out.textContent = '请求中…';
+      try {
+        const r = await fetch('/api/codes/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ older_than_days: days, dry_run: dryRun }),
+        });
+        const data = await r.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        if (!r.ok) {
+          const d = data.detail;
+          const msg =
+            typeof d === 'string'
+              ? d
+              : Array.isArray(d)
+                ? d.map((x) => x.msg || JSON.stringify(x)).join('; ')
+                : JSON.stringify(data);
+          showBanner(msg, true);
+          return;
+        }
+        if (dryRun) {
+          const n = data.matched ?? 0;
+          showBanner(
+            days === 0
+              ? '预览：当前共有 ' + n + ' 条已使用记录可删（未执行删除）'
+              : '预览：将匹配 ' + n + ' 条（未执行删除）',
+            false
+          );
+        } else {
+          showBanner('已删除 ' + (data.deleted ?? 0) + ' 条', false);
+          refreshStock();
+          loadList();
+        }
+      } catch (e) {
+        out.textContent = String(e);
+        showBanner(e.message, true);
+      }
+    }
+
+    document.getElementById('btn-cleanup-preview').addEventListener('click', () => runCleanup(true));
+    document.getElementById('btn-cleanup-run').addEventListener('click', () => runCleanup(false));
 
     document.getElementById('btn-void').addEventListener('click', async () => {
       hideBanner();

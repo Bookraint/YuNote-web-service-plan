@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import secrets
 import string
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -169,3 +169,81 @@ def void_code(body: VoidCodeBody, request: Request):
     update_data: dict = {"status": "unused", "used_by_job_id": None, "used_at": None}
     db.table("redeem_codes").update(update_data).eq("code", body.code).execute()
     return {"ok": True, "code": body.code, "restored_to": "unused"}
+
+
+# ── 清理已核销的旧记录（释放库空间）──────────────────────────────
+
+class CleanupCodesBody(BaseModel):
+    """
+    删除 **已使用** 的兑换码行（unused 永不删）。
+
+    - **older_than_days 为正**：仅删除 `used_at` 早于「现在 − N 天」的记录。
+    - **older_than_days = 0**：不按时间过滤，删除 **全部** `status=used` 行（仍不删 unused）。
+
+    订单表 `orders.redeem_code` 存明文副本，删码不影响历史订单展示。
+    """
+
+    older_than_days: int = Field(
+        ...,
+        ge=0,
+        le=3650,
+        description="0=全部已使用记录；>0 则只删 used_at 早于「现在−N天」的已使用记录",
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="为 true 时只统计匹配行数，不执行删除",
+    )
+
+
+@router.post("/codes/cleanup")
+def cleanup_codes(body: CleanupCodesBody, request: Request):
+    """
+    清理已核销的兑换码行，减小 `redeem_codes` 表体积。
+
+    **unused** 永不删。`older_than_days=0` 时删除全部 **used** 行；否则只删 `used_at` 早于截止时间的行。建议先 dry_run。
+    """
+    _require_admin(request)
+
+    db = get_db()
+    cutoff_iso: str | None
+    if body.older_than_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=body.older_than_days)
+        cutoff_iso = cutoff.isoformat()
+    else:
+        cutoff_iso = None
+
+    q = db.table("redeem_codes").select("code", count="exact").eq("status", "used")
+    if cutoff_iso is not None:
+        q = q.lt("used_at", cutoff_iso)
+    count_res = q.execute()
+    matched = int(count_res.count or 0)
+
+    if body.dry_run:
+        return {
+            "dry_run":           True,
+            "older_than_days":   body.older_than_days,
+            "cutoff_utc":        cutoff_iso,
+            "matched":           matched,
+            "deleted":           0,
+        }
+
+    if matched == 0:
+        return {
+            "dry_run":           False,
+            "older_than_days":   body.older_than_days,
+            "cutoff_utc":        cutoff_iso,
+            "matched":           0,
+            "deleted":           0,
+        }
+
+    dq = db.table("redeem_codes").delete().eq("status", "used")
+    if cutoff_iso is not None:
+        dq = dq.lt("used_at", cutoff_iso)
+    dq.execute()
+    return {
+        "dry_run":           False,
+        "older_than_days":   body.older_than_days,
+        "cutoff_utc":        cutoff_iso,
+        "matched":           matched,
+        "deleted":           matched,
+    }

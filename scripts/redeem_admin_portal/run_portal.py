@@ -129,6 +129,40 @@ def proxy_void(body: dict):
     return _forward_response(r)
 
 
+@app.post("/api/codes/cleanup")
+def proxy_cleanup(body: dict):
+    """
+    转发到主服务 POST /api/admin/codes/cleanup。
+    Body: { "older_than_days": 30, "dry_run": true }；older_than_days=0 表示全部已使用记录。
+    仅删除已核销（used）的码；未使用（unused）不删。
+    """
+    if not ADMIN_KEY:
+        raise HTTPException(503, detail="请在 .env 中配置 ADMIN_KEY")
+    url = f"{API_BASE}/api/admin/codes/cleanup"
+    try:
+        r = httpx.post(
+            url,
+            json=body,
+            headers={**_admin_headers(), "Content-Type": "application/json"},
+            timeout=120.0,
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(502, detail=f"无法连接 {API_BASE}: {e}") from e
+    if r.status_code == 404:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": (
+                    "远端返回 404：该地址上还没有「清理已核销」接口。"
+                    "请把 YuNote 主服务部署为包含 POST /api/admin/codes/cleanup 的版本；"
+                    "或在项目根目录启动最新主服务后，将 .env 里 YUNOTE_API_BASE 改为 http://127.0.0.1:7860（或你的本地端口）再试。"
+                ),
+                "upstream_url": url,
+            },
+        )
+    return _forward_response(r)
+
+
 @app.get("/")
 def index():
     index_path = _STATIC / "index.html"
