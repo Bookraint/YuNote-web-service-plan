@@ -620,6 +620,21 @@
   let evtSource         = null;
   /** 上传 / 报价 / 处理进行中：禁止换文件，避免与当前任务混淆 */
   let uploadLocked      = false;
+  /** 与后端 MAX_UPLOAD_MB 一致，启动后由 /api/config 覆盖 */
+  let maxUploadMb       = 500;
+
+  async function loadPublicConfig() {
+    try {
+      const r = await fetch(`${API}/api/config`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.max_upload_mb != null && Number.isFinite(Number(d.max_upload_mb))) {
+        maxUploadMb = Number(d.max_upload_mb);
+        const el = document.getElementById('max-size');
+        if (el) el.textContent = String(maxUploadMb);
+      }
+    } catch (_) {}
+  }
 
   function setUploadLocked(on) {
     uploadLocked = !!on;
@@ -634,6 +649,7 @@
 
   // ── 初始化 ────────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
+    loadPublicConfig();
     // 清理历史遗留 URL 参数（如刷新前带有 job_id）
     const params = new URLSearchParams(location.search);
     if (params.has('job_id') || params.has('paid') || params.has('cancelled')) {
@@ -759,6 +775,12 @@
 
   function setFile(f) {
     if (uploadLocked) return;
+    const limitBytes = maxUploadMb * 1048576;
+    if (f.size > limitBytes) {
+      toast(`文件超过 ${maxUploadMb} MB 上限，请压缩或剪辑后重试`, 'err');
+      fileInput.value = '';
+      return;
+    }
     currentFile = f;
     fileName.textContent = `${f.name}  ·  ${(f.size / 1048576).toFixed(1)} MB`;
     dropZone.classList.add('has-file');

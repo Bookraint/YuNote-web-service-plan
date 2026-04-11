@@ -60,6 +60,12 @@ def get_prompts():
     return out
 
 
+@router.get("/api/config")
+def get_public_config():
+    """前端展示与校验用，与 MAX_UPLOAD_MB 等环境变量一致。"""
+    return {"max_upload_mb": cfg.MAX_UPLOAD_MB}
+
+
 # ── 上传文件并获取报价 ────────────────────────────────────────────
 
 @router.post("/api/jobs")
