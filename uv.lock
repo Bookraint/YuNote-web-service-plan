@@ -672,6 +672,23 @@ wheels = [
 ]
 
 [[package]]
+name = "modelscope"
+version = "1.35.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "filelock" },
+    { name = "packaging" },
+    { name = "requests" },
+    { name = "setuptools" },
+    { name = "tqdm" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cc/d9/015d658b1c86f4ca380fb5f1aebf2a74528e8277af305b12ee4b09af004a/modelscope-1.35.3.tar.gz", hash = "sha256:502168541da4a261f94d9d4f491348888fd439f564fd79444bcf4e73f17fe669", size = 4566444, upload-time = "2026-03-27T07:33:33.506Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/ca/52378c0ae37a77afd1bd48ad2d01a1638ae1192be7bfad31da3359306df9/modelscope-1.35.3-py3-none-any.whl", hash = "sha256:e3f2f14c156d790d65d630279ca7e316d834645dac1066d78383a59160515d9c", size = 6059875, upload-time = "2026-03-27T07:33:30.326Z" },
+]
+
+[[package]]
 name = "multidict"
 version = "6.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1253,6 +1270,15 @@ wheels = [
 ]
 
 [[package]]
+name = "setuptools"
+version = "82.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/db/cfac1baf10650ab4d1c111714410d2fbb77ac5a616db26775db562c8fab2/setuptools-82.0.1.tar.gz", hash = "sha256:7d872682c5d01cfde07da7bccc7b65469d3dca203318515ada1de5eda35efbf9", size = 1152316, upload-time = "2026-03-09T12:47:17.221Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl", hash = "sha256:a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", size = 1006223, upload-time = "2026-03-09T12:47:15.026Z" },
+]
+
+[[package]]
 name = "shellingham"
 version = "1.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1735,6 +1761,7 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "jose" },
     { name = "langdetect" },
+    { name = "modelscope" },
     { name = "openai" },
     { name = "pydub" },
     { name = "pysocks" },
@@ -1755,6 +1782,7 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=1.10.1" },
     { name = "jose", specifier = ">=1.0.0" },
     { name = "langdetect", specifier = ">=1.0.9" },
+    { name = "modelscope", specifier = ">=1.35.3" },
     { name = "openai", specifier = ">=1.0.0" },
     { name = "pydub", specifier = ">=0.25.1" },
     { name = "pysocks", specifier = ">=1.7.1" },
