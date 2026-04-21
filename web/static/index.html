@@ -417,9 +417,19 @@
     }
     .redeem-input-wrap input::placeholder { color: var(--muted); letter-spacing: 0; font-family: inherit; }
     .redeem-input-wrap.has-error { border-color: var(--danger); }
-    .redeem-hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
-    .redeem-hint a { color: var(--accent); text-decoration: none; }
-    .redeem-hint a:hover { text-decoration: underline; }
+    .redeem-hint { margin-top: 6px; font-size: 12px; color: var(--muted); text-align: right; }
+    .redeem-contact {
+      background: none; border: none; padding: 0; margin: 0;
+      font: inherit; font-size: 13px; color: var(--accent); cursor: pointer;
+      text-decoration: underline;
+    }
+    .redeem-contact:hover { color: #5af08a; }
+    .wechat-modal-overlay { z-index: 210; }
+    .wechat-id-display {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.06em;
+      text-align: center; padding: 8px 0 4px; color: var(--text); user-select: all;
+    }
   </style>
 </head>
 <body>
@@ -571,15 +581,28 @@
         <label>输入兑换码</label>
         <div class="redeem-input-wrap" id="redeem-wrap">
           <span class="redeem-icon">🎟</span>
-          <input type="text" id="redeem-code-input" placeholder="在第三方平台购买后填入"
+          <input type="text" id="redeem-code-input" placeholder="积分码"
                  autocomplete="off" spellcheck="false"
                  oninput="onRedeemInput()" />
         </div>
-        <div class="redeem-hint">没有积分码？<a href="#" onclick="return false">前往购买</a>（积分码面值需 ≥ 所选档位消耗）</div>
+        <div class="redeem-hint"><button type="button" class="redeem-contact" onclick="openWechatModal()">联系我</button></div>
       </div>
 
       <button class="btn-primary" id="confirm-pay-btn" onclick="confirmOrder()">兑换并开始处理</button>
       <button class="btn-secondary" style="margin-top:10px" onclick="cancelQuote()">取消，重新选择文件</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 微信 ═══════════════════════════════════════════════════════ -->
+<div class="modal-overlay wechat-modal-overlay" id="wechat-modal" onclick="if(event.target===this) closeWechatModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()" style="max-width:320px">
+    <div class="modal-head">
+      <span>微信</span>
+      <button type="button" onclick="closeWechatModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="wechat-id-display">uyuhsnait777</div>
     </div>
   </div>
 </div>
@@ -609,6 +632,14 @@
     if (!btn) return;
     btn.disabled = false;
     btn.textContent = '兑换并开始处理';
+  }
+
+  function openWechatModal() {
+    document.getElementById('wechat-modal').classList.add('open');
+  }
+
+  function closeWechatModal() {
+    document.getElementById('wechat-modal').classList.remove('open');
   }
 
   // ── 状态 ──────────────────────────────────────────────────────
@@ -919,6 +950,7 @@
   }
 
   function cancelQuote() {
+    closeWechatModal();
     document.getElementById('quote-modal').classList.remove('open');
     resetQuoteConfirmButton();
     resetUploadState();
@@ -982,6 +1014,7 @@
 
       // 兑换成功：拿到 access_token，直接进入处理流程
       currentAccessToken = d.access_token || null;
+      closeWechatModal();
       document.getElementById('quote-modal').classList.remove('open');
       showProgress(false);
       startSSE(currentJobId);

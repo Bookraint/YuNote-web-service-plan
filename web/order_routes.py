@@ -85,7 +85,7 @@ def create_order(body: OrderBody, request: Request):
     if row["credits"] < credits_needed:
         raise HTTPException(400, detail=(
             f"兑换码积分不足：该码面值 {row['credits']} 积分，"
-            f"本次需要 {credits_needed} 积分，请购买更多积分码"
+            f"本次需要 {credits_needed} 积分，请联系客服获取更高面值积分码（微信 uyuhsnait777）"
         ))
 
     # ── 原子占用：仅当 status=unused 时才更新，防止并发重复消耗 ──
