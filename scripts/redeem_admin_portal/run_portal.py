@@ -50,6 +50,19 @@ def _forward_response(r: httpx.Response) -> JSONResponse:
     return JSONResponse(content=data, status_code=r.status_code)
 
 
+def _filter_items_by_credits(
+    items: list,
+    credits_min: int | None,
+    credits_max: int | None,
+) -> list:
+    out = items
+    if credits_min is not None:
+        out = [i for i in out if int(i.get("credits") or 0) >= credits_min]
+    if credits_max is not None:
+        out = [i for i in out if int(i.get("credits") or 0) <= credits_max]
+    return out
+
+
 @app.get("/config")
 def config():
     """给页面展示当前连接目标（不含密钥）。"""
@@ -93,6 +106,8 @@ def proxy_generate(body: dict):
 @app.get("/api/codes/list")
 def proxy_list(
     status: str | None = None,
+    credits_min: int | None = None,
+    credits_max: int | None = None,
     limit: int = 100,
     offset: int = 0,
 ):
@@ -101,6 +116,10 @@ def proxy_list(
     params: dict = {"limit": limit, "offset": offset}
     if status in ("unused", "used"):
         params["status"] = status
+    if credits_min is not None:
+        params["credits_min"] = credits_min
+    if credits_max is not None:
+        params["credits_max"] = credits_max
     try:
         r = httpx.get(
             f"{API_BASE}/api/admin/codes",
@@ -110,7 +129,15 @@ def proxy_list(
         )
     except httpx.RequestError as e:
         raise HTTPException(502, detail=f"无法连接 {API_BASE}: {e}") from e
-    return _forward_response(r)
+    try:
+        data = r.json()
+    except Exception:
+        return _forward_response(r)
+    if credits_min is not None or credits_max is not None:
+        raw = data.get("items") or []
+        data["items"] = _filter_items_by_credits(raw, credits_min, credits_max)
+        data["returned"] = len(data["items"])
+    return JSONResponse(content=data, status_code=r.status_code)
 
 
 @app.post("/api/codes/void")

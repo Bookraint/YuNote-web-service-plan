@@ -116,6 +116,8 @@
       min-width: 5.5rem;
     }
     .list-toolbar #list-limit { width: 5rem; }
+    .list-toolbar #list-credits-min,
+    .list-toolbar #list-credits-max { width: 5rem; }
     .list-toolbar #btn-list,
     .list-toolbar #btn-copy-list,
     .list-toolbar #btn-list-prev,
@@ -232,6 +234,14 @@
         </select>
       </div>
       <div class="filter-item">
+        <label for="list-credits-min">积分 ≥</label>
+        <input type="number" id="list-credits-min" min="1" placeholder="不限" />
+      </div>
+      <div class="filter-item">
+        <label for="list-credits-max">积分 ≤</label>
+        <input type="number" id="list-credits-max" min="1" placeholder="不限" />
+      </div>
+      <div class="filter-item">
         <label for="list-limit">每页条数</label>
         <input type="number" id="list-limit" min="10" max="500" value="100" />
       </div>
@@ -243,6 +253,9 @@
         <button type="button" id="btn-list-next" disabled>下一页</button>
       </div>
     </div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
+      例：只要 100 分码 → 积分 ≥ 填 100、积分 ≤ 填 100；不要 10 分码 → 积分 ≥ 填 11
+    </p>
     <div style="overflow-x:auto">
       <table>
         <thead>
@@ -374,6 +387,16 @@
           : '复制本页全部码';
     }
 
+    function applyCreditsFilter(items, creditsMin, creditsMax) {
+      return items.filter((row) => {
+        const c = Number(row.credits);
+        if (!Number.isFinite(c)) return false;
+        if (creditsMin != null && c < creditsMin) return false;
+        if (creditsMax != null && c > creditsMax) return false;
+        return true;
+      });
+    }
+
     /** 后端多为 UTC 的 isoformat，无时区后缀时按 UTC 解析，再显示为北京时间 */
     function parseUtcLike(s) {
       if (s == null || s === '') return null;
@@ -469,6 +492,22 @@
       hideBanner();
       if (resetOffset) listOffset = 0;
       const status = document.getElementById('list-status').value;
+      const creditsMinRaw = (document.getElementById('list-credits-min').value || '').trim();
+      const creditsMaxRaw = (document.getElementById('list-credits-max').value || '').trim();
+      const creditsMin = creditsMinRaw ? parseInt(creditsMinRaw, 10) : null;
+      const creditsMax = creditsMaxRaw ? parseInt(creditsMaxRaw, 10) : null;
+      if (creditsMinRaw && (!Number.isFinite(creditsMin) || creditsMin < 1)) {
+        showToast('积分下限请填正整数', true);
+        return;
+      }
+      if (creditsMaxRaw && (!Number.isFinite(creditsMax) || creditsMax < 1)) {
+        showToast('积分上限请填正整数', true);
+        return;
+      }
+      if (creditsMin != null && creditsMax != null && creditsMin > creditsMax) {
+        showToast('积分下限不能大于上限', true);
+        return;
+      }
       const limit = parseInt(document.getElementById('list-limit').value, 10);
       const offset = listOffset;
       const body = document.getElementById('list-body');
@@ -478,6 +517,8 @@
       body.innerHTML = '<tr><td colspan="6">加载中…</td></tr>';
       const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (status) q.set('status', status);
+      if (creditsMin != null) q.set('credits_min', String(creditsMin));
+      if (creditsMax != null) q.set('credits_max', String(creditsMax));
       try {
         const r = await fetch('/api/codes/list?' + q.toString());
         const data = await r.json();
@@ -486,12 +527,27 @@
           updateListPager(limit, 0);
           return;
         }
-        const items = data.items || [];
+        const rawItems = data.items || [];
+        const items =
+          creditsMin != null || creditsMax != null
+            ? applyCreditsFilter(rawItems, creditsMin, creditsMax)
+            : rawItems;
         listPageCodes = items.map((row) => row.code).filter(Boolean);
         updateCopyListButton();
         updateListPager(limit, items.length);
         const page = Math.floor(offset / limit) + 1;
-        meta.textContent = '第 ' + page + ' 页，本页 ' + items.length + ' 条';
+        const rangeHint =
+          creditsMin != null || creditsMax != null
+            ? '，积分 ' +
+              (creditsMin != null ? creditsMin : '…') +
+              ' ~ ' +
+              (creditsMax != null ? creditsMax : '…')
+            : '';
+        let metaText = '第 ' + page + ' 页，本页 ' + items.length + ' 条' + rangeHint;
+        if ((creditsMin != null || creditsMax != null) && items.length !== rawItems.length) {
+          metaText += '（已从本页 ' + rawItems.length + ' 条中筛出）';
+        }
+        meta.textContent = metaText;
         if (items.length === 0) {
           body.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">无数据</td></tr>';
           return;

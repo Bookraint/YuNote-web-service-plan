@@ -125,16 +125,33 @@ def list_codes(
         default=None,
         description="按状态筛选：unused / used，不传则全部",
     ),
+    credits_min: Optional[int] = Query(
+        default=None,
+        ge=1,
+        description="面值下限（积分，含）",
+    ),
+    credits_max: Optional[int] = Query(
+        default=None,
+        ge=1,
+        description="面值上限（积分，含）",
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
     """按创建时间倒序列出兑换码，供管理后台分页查看。"""
     _require_admin(request)
 
+    if credits_min is not None and credits_max is not None and credits_min > credits_max:
+        raise HTTPException(400, detail="credits_min 不能大于 credits_max")
+
     db = get_db()
     q = db.table("redeem_codes").select("*")
     if status in ("unused", "used"):
         q = q.eq("status", status)
+    if credits_min is not None:
+        q = q.gte("credits", credits_min)
+    if credits_max is not None:
+        q = q.lte("credits", credits_max)
     res = (
         q.order("created_at", desc=True)
         .range(offset, offset + limit - 1)
