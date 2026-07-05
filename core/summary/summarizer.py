@@ -205,14 +205,18 @@ class Summarizer:
 
         def _run() -> None:
             try:
-                resp = self._client.chat.completions.create(
-                    model=self.config.llm_model,
-                    messages=[
+                create_kwargs: dict = {
+                    "model": self.config.llm_model,
+                    "messages": [
                         {"role": "system", "content": system},
                         {"role": "user",   "content": user},
                     ],
-                    temperature=0.3,
-                )
+                    "temperature": 0.3,
+                }
+                # DashScope Qwen3 非流式调用必须显式关闭 thinking
+                if "dashscope" in (self.config.llm_base_url or ""):
+                    create_kwargs["extra_body"] = {"enable_thinking": False}
+                resp = self._client.chat.completions.create(**create_kwargs)
                 _result[0] = resp.choices[0].message.content or ""
             except Exception as exc:
                 _error[0] = exc
