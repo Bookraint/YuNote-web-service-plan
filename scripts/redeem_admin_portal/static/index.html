@@ -85,6 +85,8 @@
     }
     th { color: var(--muted); font-weight: 500; }
     code, .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+    .copyable-code { cursor: pointer; }
+    .copyable-code:hover { color: var(--accent); text-decoration: underline; }
     .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
     .tag-unused { background: #23863633; color: var(--ok); }
     .tag-used { background: #6e768166; color: var(--muted); }
@@ -114,11 +116,25 @@
       min-width: 5.5rem;
     }
     .list-toolbar #list-limit { width: 5rem; }
-    .list-toolbar #list-offset { width: 5rem; }
-    .list-toolbar #btn-list {
+    .list-toolbar #btn-list,
+    .list-toolbar #btn-copy-list,
+    .list-toolbar #btn-list-prev,
+    .list-toolbar #btn-list-next {
       flex: 0 0 auto;
       padding-left: 18px;
       padding-right: 18px;
+    }
+    .list-pager {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .list-pager span {
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 4.5rem;
+      text-align: center;
     }
     pre.out {
       margin: 12px 0 0;
@@ -138,12 +154,37 @@
       min-height: 1.4em;
     }
     a { color: var(--accent); }
+    .toast {
+      display: none;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10000;
+      padding: 16px 28px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.4;
+      text-align: center;
+      max-width: min(90vw, 360px);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+      animation: toast-pop 0.2s ease;
+      pointer-events: none;
+    }
+    .toast.ok { background: #238636; color: #fff; border: 1px solid #3fb950; }
+    .toast.err { background: #8b1e16; color: #fff; border: 1px solid #f85149; }
+    @keyframes toast-pop {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
   </style>
 </head>
 <body>
   <h1>YuNote 兑换码管理</h1>
   <p class="sub">本页仅通过本机服务转发请求，密钥不写入浏览器。请先运行 <code>python scripts/redeem_admin_portal/run_portal.py</code></p>
   <div id="banner" class="banner" style="display:none"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <section>
     <h2>连接状态</h2>
@@ -194,11 +235,13 @@
         <label for="list-limit">每页条数</label>
         <input type="number" id="list-limit" min="10" max="500" value="100" />
       </div>
-      <div class="filter-item">
-        <label for="list-offset">偏移</label>
-        <input type="number" id="list-offset" min="0" value="0" />
-      </div>
       <button type="button" id="btn-list">查询</button>
+      <button type="button" id="btn-copy-list" disabled title="复制当前表格中的全部兑换码，一行一个">复制本页全部码</button>
+      <div class="list-pager">
+        <button type="button" id="btn-list-prev" disabled>上一页</button>
+        <span id="list-page-label">第 1 页</span>
+        <button type="button" id="btn-list-next" disabled>下一页</button>
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table>
@@ -221,11 +264,13 @@
   <section>
     <h2>清理已核销</h2>
     <p style="font-size:13px;color:var(--muted);margin:0 0 10px">
-      只删<strong>已使用</strong>行；未使用不动。<strong>0</strong>=全部已用；<strong>正数</strong>=删「今天−N天」之前核销的。
+      只删<strong>已使用</strong>的码，<strong>未使用</strong>的不动。<br>
+      <strong>0</strong>：删掉全部已使用的；<br>
+      <strong>30</strong>：只删「核销已超过 30 天」的（例如今天 4 月 5 日，则删 3 月 6 日及更早核销的）。
     </p>
     <div class="row">
       <div class="field">
-        <label for="cleanup-days">天（0=全部已使用）</label>
+        <label for="cleanup-days">核销超过多少天（0=全部已使用）</label>
         <input type="number" id="cleanup-days" min="0" max="3650" value="30" />
       </div>
       <button type="button" id="btn-cleanup-preview">预览数量</button>
@@ -249,6 +294,12 @@
 
   <script>
     const banner = document.getElementById('banner');
+    const toast = document.getElementById('toast');
+    let listPageCodes = [];
+    let listOffset = 0;
+    let listHasMore = false;
+    let toastTimer = null;
+
     function showBanner(text, isErr) {
       banner.style.display = 'block';
       banner.textContent = text;
@@ -256,6 +307,24 @@
     }
     function hideBanner() {
       banner.style.display = 'none';
+    }
+
+    function showToast(text, isErr) {
+      toast.textContent = text;
+      toast.className = 'toast ' + (isErr ? 'err' : 'ok');
+      toast.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 2200);
+    }
+
+    function updateListPager(limit, returned) {
+      listHasMore = returned === limit;
+      const page = Math.floor(listOffset / limit) + 1;
+      document.getElementById('list-page-label').textContent = '第 ' + page + ' 页';
+      document.getElementById('btn-list-prev').disabled = listOffset <= 0;
+      document.getElementById('btn-list-next').disabled = !listHasMore;
     }
 
     async function loadConfig() {
@@ -278,6 +347,31 @@
       const d = document.createElement('div');
       d.textContent = s;
       return d.innerHTML;
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (!ok) throw new Error('浏览器不允许复制，请手动选择复制');
+    }
+
+    function updateCopyListButton() {
+      const btn = document.getElementById('btn-copy-list');
+      btn.disabled = listPageCodes.length === 0;
+      btn.textContent =
+        listPageCodes.length > 0
+          ? '复制本页全部码（' + listPageCodes.length + '）'
+          : '复制本页全部码';
     }
 
     /** 后端多为 UTC 的 isoformat，无时区后缀时按 UTC 解析，再显示为北京时间 */
@@ -371,13 +465,16 @@
 
     document.getElementById('btn-stock').addEventListener('click', refreshStock);
 
-    async function loadList() {
+    async function loadList(resetOffset) {
       hideBanner();
+      if (resetOffset) listOffset = 0;
       const status = document.getElementById('list-status').value;
       const limit = parseInt(document.getElementById('list-limit').value, 10);
-      const offset = parseInt(document.getElementById('list-offset').value, 10);
+      const offset = listOffset;
       const body = document.getElementById('list-body');
       const meta = document.getElementById('list-meta');
+      listPageCodes = [];
+      updateCopyListButton();
       body.innerHTML = '<tr><td colspan="6">加载中…</td></tr>';
       const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (status) q.set('status', status);
@@ -386,11 +483,15 @@
         const data = await r.json();
         if (!r.ok) {
           body.innerHTML = '<tr><td colspan="6" style="color:var(--danger)">' + escapeHtml(JSON.stringify(data.detail || data)) + '</td></tr>';
+          updateListPager(limit, 0);
           return;
         }
         const items = data.items || [];
-        meta.textContent =
-          '本页 ' + items.length + ' 条（limit=' + data.limit + ', offset=' + data.offset + '）';
+        listPageCodes = items.map((row) => row.code).filter(Boolean);
+        updateCopyListButton();
+        updateListPager(limit, items.length);
+        const page = Math.floor(offset / limit) + 1;
+        meta.textContent = '第 ' + page + ' 页，本页 ' + items.length + ' 条';
         if (items.length === 0) {
           body.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">无数据</td></tr>';
           return;
@@ -403,7 +504,9 @@
                 ? '<span class="tag tag-unused">未使用</span>'
                 : '<span class="tag tag-used">已使用</span>';
             return (
-              '<tr><td class="mono">' +
+              '<tr><td class="mono copyable-code" title="点击复制该码" data-code="' +
+              escapeHtml(row.code) +
+              '">' +
               escapeHtml(row.code) +
               '</td><td>' +
               row.credits +
@@ -424,7 +527,47 @@
       }
     }
 
-    document.getElementById('btn-list').addEventListener('click', loadList);
+    document.getElementById('btn-list').addEventListener('click', () => loadList(true));
+
+    document.getElementById('btn-list-prev').addEventListener('click', () => {
+      const limit = parseInt(document.getElementById('list-limit').value, 10);
+      if (listOffset <= 0) return;
+      listOffset = Math.max(0, listOffset - limit);
+      loadList(false);
+    });
+
+    document.getElementById('btn-list-next').addEventListener('click', () => {
+      const limit = parseInt(document.getElementById('list-limit').value, 10);
+      if (!listHasMore) return;
+      listOffset += limit;
+      loadList(false);
+    });
+
+    document.getElementById('btn-copy-list').addEventListener('click', async () => {
+      if (listPageCodes.length === 0) {
+        showToast('当前页没有可复制的兑换码', true);
+        return;
+      }
+      try {
+        await copyText(listPageCodes.join('\n'));
+        showToast('已复制 ' + listPageCodes.length + ' 个兑换码\n（一行一个）', false);
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    });
+
+    document.getElementById('list-body').addEventListener('click', async (ev) => {
+      const cell = ev.target.closest('.copyable-code');
+      if (!cell) return;
+      const code = cell.dataset.code;
+      if (!code) return;
+      try {
+        await copyText(code);
+        showToast('已复制\n' + code, false);
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    });
 
     async function runCleanup(dryRun) {
       hideBanner();
@@ -436,8 +579,8 @@
       if (!dryRun) {
         const ok = window.confirm(
           days === 0
-            ? '将永久删除全部「已使用」兑换码行（未使用不受影响）。确定？'
-            : '将永久删除「已使用」且早于 ' + days + ' 天的记录。确定？'
+            ? '将永久删除全部「已使用」兑换码（未使用不受影响）。确定？'
+            : '将永久删除「核销已超过 ' + days + ' 天」的已使用兑换码。确定？'
         );
         if (!ok) return;
       }
@@ -511,7 +654,7 @@
 
     loadConfig();
     refreshStock();
-    loadList();
+    loadList(false);
   </script>
 </body>
 </html>
