@@ -16,8 +16,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Wake Up Space
+      - name: Wake Up HF Space
         run: curl -I https://huggingface.co/spaces/dfsfads/YuNote
+
+      # 轻量请求魔塔空间，避免长时间无访问后实例断开
+      - name: Wake Up ModelScope Space
+        run: curl -I https://modelscope.cn/studios/tsy777/YuNote/summary
 
       # 轻量请求 PostgREST，避免 Supabase 免费项目长期无流量进入休眠 / 连接被回收
       # 在仓库 Settings → Secrets → Actions 中配置：
